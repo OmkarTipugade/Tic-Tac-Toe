@@ -27,11 +27,25 @@ const SignIn: React.FC = () => {
       const { email, password } = data;
 
       const session = await nkClient.authenticateEmail(email, password, false);
-      // Add email to session for profile display
       localStorage.setItem("user_session", JSON.stringify(session));
-      const sessionWithEmail = { ...session, email };
-      localStorage.setItem("logged_user", JSON.stringify(sessionWithEmail));
-      setUser(sessionWithEmail);
+
+      try {
+        const account = await nkClient.getAccount(session);
+        const sessionWithProfile = {
+          ...session,
+          email,
+          username: account.user?.username || email.split('@')[0],
+          user_id: account.user?.id,
+          avatarUrl: account.user?.avatar_url || ""
+        };
+        localStorage.setItem("logged_user", JSON.stringify(sessionWithProfile));
+        setUser(sessionWithProfile);
+      } catch (accountErr) {
+        console.warn("Failed to fetch account data, using basic info:", accountErr);
+        const sessionWithEmail = { ...session, email };
+        localStorage.setItem("logged_user", JSON.stringify(sessionWithEmail));
+        setUser(sessionWithEmail);
+      }
 
       toast.success("Signed in successfully!", toastOptions);
       setTimeout(() => navigate("/"), 1000);

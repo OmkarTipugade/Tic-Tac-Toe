@@ -37,21 +37,43 @@ const SignUp: React.FC = () => {
         username
       );
       localStorage.setItem("user_session", JSON.stringify(session));
+
+      const account = await nkClient.getAccount(session);
+      const sessionWithProfile = {
+        ...session,
+        email,
+        username: account.user?.username || username,
+        user_id: account.user?.id,
+        avatarUrl: account.user?.avatar_url || ""
+      };
+
       if (session.created) {
         toast.success("Account created successfully!", toastOptions);
-        // Add email to session for profile display
-        const sessionWithEmail = { ...session, email };
-        localStorage.setItem('logged_user', JSON.stringify(sessionWithEmail))
-        setUser(sessionWithEmail);
+        localStorage.setItem('logged_user', JSON.stringify(sessionWithProfile))
+        setUser(sessionWithProfile);
         setTimeout(() => {
           navigate("/");
         }, 3000);
-      }
-      if (!session.created) {
-        toast.info("Account already exists. Please sign in.", toastOptions);
+      } else {
+        toast.info("Account already exists. Signing you in...", toastOptions);
+        localStorage.setItem('logged_user', JSON.stringify(sessionWithProfile))
+        setUser(sessionWithProfile);
+        setTimeout(() => {
+          navigate("/");
+        }, 2000);
       }
     } catch (err: any) {
-      toast.error("Registration failed. Please try again.", toastOptions);
+      console.error("Signup error:", err);
+
+      if (err.message && err.message.includes("already exists")) {
+        toast.error("User already exists. Please sign in instead.", toastOptions);
+        setTimeout(() => navigate("/sign-in"), 2000);
+      } else if (err.status === 409) {
+        toast.error("User already exists. Please sign in instead.", toastOptions);
+        setTimeout(() => navigate("/sign-in"), 2000);
+      } else {
+        toast.error(err.message || "Registration failed. Please try again.", toastOptions);
+      }
     }
   };
 
