@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import { nkClient } from "../../services/nakama-client";
 import { toast, ToastContainer, Bounce } from "react-toastify";
 import { toastOptions } from "../../utils/toast-options";
+import { useAuth } from "../../context/AuthContext";
 
 type SignInForm = {
   email: string;
@@ -12,6 +13,7 @@ type SignInForm = {
 
 const SignIn: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
+  const { setUser } = useAuth();
 
   const navigate = useNavigate();
   const {
@@ -25,7 +27,11 @@ const SignIn: React.FC = () => {
       const { email, password } = data;
 
       const session = await nkClient.authenticateEmail(email, password, false);
-      localStorage.setItem("logged_user", JSON.stringify(session));
+      // Add email to session for profile display
+      localStorage.setItem("user_session", JSON.stringify(session));
+      const sessionWithEmail = { ...session, email };
+      localStorage.setItem("logged_user", JSON.stringify(sessionWithEmail));
+      setUser(sessionWithEmail);
 
       toast.success("Signed in successfully!", toastOptions);
       setTimeout(() => navigate("/"), 1000);
@@ -68,9 +74,8 @@ const SignIn: React.FC = () => {
             {...register("email", { required: "Email is required" })}
             type="email"
             placeholder="Enter email"
-            className={`border p-2 rounded-md bg-white text-black ${
-              errors.email ? "border-red-500" : "border-black"
-            }`}
+            className={`border p-2 rounded-md bg-white text-black ${errors.email ? "border-red-500" : "border-black"
+              }`}
           />
           {errors.email && (
             <p className="text-red-500 text-sm">{errors.email.message}</p>
@@ -87,9 +92,8 @@ const SignIn: React.FC = () => {
               })}
               type={showPassword ? "text" : "password"}
               placeholder="Enter password"
-              className={`border w-full p-2 pr-10 rounded-md bg-white text-black ${
-                errors.password ? "border-red-500" : "border-black"
-              }`}
+              className={`border w-full p-2 pr-10 rounded-md bg-white text-black ${errors.password ? "border-red-500" : "border-black"
+                }`}
             />
             <span
               onClick={() => setShowPassword(!showPassword)}

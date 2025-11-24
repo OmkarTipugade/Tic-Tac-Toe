@@ -1,4 +1,4 @@
-import React, { Activity } from "react";
+import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router";
 import SignIn from "./page/auth/SignIn";
 import SignUp from "./page/auth/SignUp";
@@ -10,40 +10,35 @@ import GameLayout from "./layout/GameLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Leaderboard from "./page/Leaderboard";
 import ProfilePage from "./page/ProgilePage";
+import { AuthProvider } from "./context/AuthContext";
 
 const App: React.FC = () => {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<AuthLayout />}>
-          <Route path="/sign-in" element={<SignIn />} />
-          <Route path="/sign-up" element={<SignUp />} />
-          <Route element={<GameLayout />}>
-            <Route path="/offline-game" element={<PlayGame />} />
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<AuthLayout />}>
+            <Route path="/sign-in" element={<SignIn />} />
+            <Route path="/sign-up" element={<SignUp />} />
+            <Route element={<GameLayout />}>
+              <Route path="/offline-game" element={<PlayGame />} />
+            </Route>
           </Route>
-        </Route>
-        <Route element={<DefaultLayout />}>
-          <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/" element={<Home />} />
+          <Route element={<DefaultLayout />}>
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/" element={<Home />} />
+            <Route path="/profile" element={<ProfilePage />} />
+          </Route>
+
           <Route element={<ProtectedRoute />}>
-            <Route
-              path="/profile"
-              element={
-                <Activity mode={localStorage.getItem("logged_user") ? "visible" : "hidden"}>
-                  <ProfilePage />
-                </Activity>
-              }
-            />
+
           </Route>
-        </Route>
+        </Routes>
 
-        <Route element={<ProtectedRoute />}>
-
-        </Route>
-      </Routes>
-
-    </BrowserRouter>
+      </BrowserRouter>
+    </AuthProvider>
   );
 };
 
 export default App;
+
