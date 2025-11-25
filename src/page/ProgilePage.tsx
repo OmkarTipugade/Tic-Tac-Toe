@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { toast } from "react-toastify";
+import countries from "../utils/countries";
 import { avatar1, avatar2, avatar3, avatar4, avatar5, avatar6, avatar7, avatar8 } from "../assets/avatars/avatars";
 import { nkClient } from "../services/nakama-client";
 import { Session } from "@heroiclabs/nakama-js";
@@ -9,6 +10,7 @@ type AccountInfo = {
   userId: string;
   username: string;
   email?: string;
+  location?: string;
   avatarUrl?: string;
 };
 
@@ -38,6 +40,7 @@ const ProfilePage: React.FC = () => {
   const [gameHistory, setGameHistory] = useState<GameHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState<string>("");
   const [showAvatarModal, setShowAvatarModal] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,9 +62,11 @@ const ProfilePage: React.FC = () => {
           userId: user.user_id || "",
           username: user.username || "",
           email: user.email || "",
+          location: user.location || "",
           avatarUrl: user.avatarUrl || "",
         });
 
+        setSelectedCountry(user.location || "");
         setSelectedAvatar(user.avatarUrl || "");
 
         setEditForm({
@@ -91,10 +96,63 @@ const ProfilePage: React.FC = () => {
   const handleSaveChanges = async () => {
     if (!user) return;
 
+    // Validate username
+    if (!editForm.username || editForm.username.trim().length === 0) {
+      toast.error("Username cannot be empty");
+      return;
+    }
+
+    if (editForm.username.trim().length < 3) {
+      toast.error("Username must be at least 3 characters");
+      return;
+    }
+
     try {
+      const sessionStr = localStorage.getItem("user_session");
+
+      if (!sessionStr) {
+        toast.error("No active session found. Please login again.");
+        return;
+      }
+
+      const sessionData = JSON.parse(sessionStr);
+
+      if (!sessionData.token) {
+        toast.error("Invalid session. Please login again.");
+        return;
+      }
+
+      console.log("Updating account on Nakama server...");
+
+      const session = Session.restore(
+        sessionData.token,
+        sessionData.refresh_token
+      );
+
+      // Call backend RPC to update profile
+      const response = await nkClient.rpc(session, "update_user_profile", {
+        username: editForm.username,
+        display_name: editForm.username,
+        location: selectedCountry,
+        avatar_url: selectedAvatar
+      });
+
+      const result = JSON.parse(
+        typeof response.payload === "string"
+          ? response.payload
+          : JSON.stringify(response.payload)
+      );
+
+      if (!result.success) {
+        throw new Error(result.error || "Update failed");
+      }
+
+      console.log("Nakama update successful!", result);
+
       const updatedUser = {
         ...user,
         username: editForm.username,
+        location: selectedCountry,
         avatarUrl: selectedAvatar,
       };
 
@@ -106,51 +164,19 @@ const ProfilePage: React.FC = () => {
           ? {
             ...prev,
             username: editForm.username,
+            location: selectedCountry,
             avatarUrl: selectedAvatar,
           }
           : null
       );
 
       setIsEditing(false);
-
-      try {
-        const sessionStr = localStorage.getItem("user_session");
-
-        if (sessionStr) {
-          const sessionData = JSON.parse(sessionStr);
-
-          if (sessionData.token) {
-            console.log("Updating account on Nakama server...");
-
-            const session = Session.restore(
-              sessionData.token,
-              sessionData.refresh_token
-            );
-
-            await nkClient.updateAccount(session, {
-              username: editForm.username,
-              display_name: editForm.username,
-              avatar_url: selectedAvatar
-            });
-            console.log("Nakama update successful!");
-            toast.success("Profile updated successfully!");
-          } else {
-            console.warn("No token found in session");
-            toast.success("Profile updated locally!");
-          }
-        } else {
-          console.warn("No user_session found");
-          toast.success("Profile updated locally!");
-        }
-      } catch (serverErr: any) {
-        console.error("Failed to sync with server:", serverErr);
-        toast.success("Profile updated locally (server sync failed)");
-      }
+      toast.success("Profile updated successfully!");
 
     } catch (err: any) {
       console.error("Failed to update profile", err);
       toast.error(err.message || "Failed to update profile");
-      setIsEditing(true);
+      // Don't change edit state on error, so user can try again
     }
   };
 
@@ -158,6 +184,7 @@ const ProfilePage: React.FC = () => {
     setEditForm({
       username: account?.username || "",
     });
+    setSelectedCountry(account?.location || "");
     setSelectedAvatar(account?.avatarUrl || "");
     setIsEditing(false);
   };
@@ -189,6 +216,7 @@ const ProfilePage: React.FC = () => {
       reader.readAsDataURL(file);
     }
   };
+
 
   if (loading) {
     return (
@@ -327,6 +355,36 @@ const ProfilePage: React.FC = () => {
                     </button>
                   )}
                 </div>
+              </div>
+
+              <div>
+                <p className="text-xs uppercase tracking-wide text-gray-600 mb-2">
+                  Country
+                </p>
+                {isEditing ? (
+                  <select
+                    value={selectedCountry}
+                    onChange={(e) => setSelectedCountry(e.target.value)}
+                    className="text-xl font-semibold text-black border-2 border-gray-300 rounded px-3 py-2 w-full focus:border-black focus:outline-none"
+                  >
+                    <option value="">Select your country</option>
+                    {countries.map((country, index) => (
+                      <option key={index} value={country.name}>
+                        {country.flag} {country.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-xl font-semibold text-black">
+                    {account.location ? (
+                      <>
+                        {countries.find(c => c.name === account.location)?.flag} {account.location}
+                      </>
+                    ) : (
+                      "Not set"
+                    )}
+                  </p>
+                )}
               </div>
 
               <div>

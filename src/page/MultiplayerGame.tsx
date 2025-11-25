@@ -61,7 +61,6 @@ const MultiplayerGame: React.FC = () => {
       setGameStatus('connecting');
       setErrorMessage('');
 
-      // Get session from localStorage
       const sessionData = localStorage.getItem('user_session');
       if (!sessionData) {
         setErrorMessage('No active session. Please sign in again.');
@@ -72,17 +71,13 @@ const MultiplayerGame: React.FC = () => {
 
       const session = JSON.parse(sessionData) as Session;
 
-      // Restore the session
-      const restoredSession = await nkClient.sessionRefresh(session);
-      localStorage.setItem('user_session', JSON.stringify(restoredSession));
-
-      if (!restoredSession.user_id) {
+      if (!session.user_id) {
         throw new Error('Failed to get user ID from session');
       }
-      setMyUserId(restoredSession.user_id);
+      setMyUserId(session.user_id);
 
       // Create match service
-      const matchService = new NakamaMatchService(nkClient, restoredSession);
+      const matchService = new NakamaMatchService(nkClient, session);
       matchServiceRef.current = matchService;
 
       // Set up callbacks for real-time updates

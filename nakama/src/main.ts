@@ -21,11 +21,12 @@ interface PlayerInfo {
     symbol: string;
 }
 
-// Initialize the Nakama module
 function InitModule(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, initializer: nkruntime.Initializer) {
     // Register RPC functions
     initializer.registerRpc('create_match', rpcCreateMatch);
     initializer.registerRpc('find_match', rpcFindMatch);
+    initializer.registerRpc('get_user_account', rpcGetUserAccount);
+    initializer.registerRpc('update_user_profile', rpcUpdateUserProfile);
 
     // Register match handler
     initializer.registerMatch('tictactoe', {
@@ -91,6 +92,116 @@ function rpcFindMatch(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkru
     logger.info(`Created new match: ${matchId} with mode: ${mode}, timeLimit: ${timeLimit}`);
     return JSON.stringify({ matchId });
 }
+
+// RPC to get user account information
+function rpcGetUserAccount(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, payload: string): string {
+    try {
+        const userId = ctx.userId;
+
+        if (!userId) {
+            logger.error('Get account failed: User not authenticated');
+            return JSON.stringify({
+                success: false,
+                error: 'User not authenticated'
+            });
+        }
+
+        logger.info(`Getting account for user: ${userId}`);
+
+        const account = nk.accountGetId(userId);
+
+        if (!account || !account.user) {
+            logger.error('Failed to retrieve account');
+            return JSON.stringify({
+                success: false,
+                error: 'Failed to retrieve account'
+            });
+        }
+
+        return JSON.stringify({
+            success: true,
+            account: {
+                user: {
+                    id: userId,
+                    username: account.user?.username || '',
+                    display_name: account.user?.displayName || '',
+                    avatar_url: account.user?.avatarUrl || '',
+                    email: account.email || ''
+                }
+            }
+        });
+    } catch (e) {
+        logger.error('Failed to get account: ' + e);
+        return JSON.stringify({
+            success: false,
+            error: String(e)
+        });
+    }
+}
+
+// RPC to update user profile
+function rpcUpdateUserProfile(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, payload: string): string {
+    try {
+        const userId = ctx.userId;
+
+        if (!userId) {
+            logger.error('Update profile failed: User not authenticated');
+            return JSON.stringify({
+                success: false,
+                error: 'User not authenticated'
+            });
+        }
+
+        const params = JSON.parse(payload);
+        const { username, display_name, avatar_url } = params;
+
+        logger.info(`Updating profile for user: ${userId}, params: ${JSON.stringify(params)}`);
+
+        // Update player account
+        nk.accountUpdateId(
+            userId,
+            username || undefined,       // username
+            display_name || undefined,   // displayName
+            avatar_url || undefined,     // avatarUrl
+            undefined,                   // langTag
+            undefined,                   // location                  // metadata
+        );
+
+        // Fetch updated data
+        const account = nk.accountGetId(userId);
+
+        if (!account || !account.user) {
+            logger.error('Failed to retrieve updated account');
+            return JSON.stringify({
+                success: false,
+                error: 'Failed to retrieve updated account'
+            });
+        }
+
+        logger.info(`Profile updated successfully for user: ${userId}`);
+
+        return JSON.stringify({
+            success: true,
+            account: {
+                user: {
+                    id: userId,
+                    username: account.user?.username || '',
+                    display_name: account.user?.displayName || '',
+                    avatar_url: account.user?.avatarUrl || '',
+                    email: account.email || ''
+                }
+            }
+        });
+
+    } catch (e) {
+        logger.error('Failed to update profile: ' + e);
+        return JSON.stringify({
+            success: false,
+            error: String(e)
+        });
+    }
+}
+
 
 // Match initialization
 function matchInit(ctx: nkruntime.Context, logger: nkruntime.Logger, nk: nkruntime.Nakama, params: { [key: string]: any }): { state: GameState, tickRate: number, label: string } {

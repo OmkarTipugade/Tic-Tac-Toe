@@ -5,17 +5,20 @@ import { toastOptions } from "../../utils/toast-options.ts";
 import { nkClient } from "../../services/nakama-client";
 import { useNavigate } from "react-router";
 import { useAuth } from "../../context/AuthContext";
+import countries from "../../utils/countries";
 
 type SignUpForm = {
   username: string;
   email: string;
   password: string;
   confirmPassword: string;
+  country: string;
 };
 
 const SignUp: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
   const { setUser } = useAuth();
 
   const {
@@ -28,8 +31,9 @@ const SignUp: React.FC = () => {
   const navigate = useNavigate();
   const onSubmit = async (data: SignUpForm) => {
     try {
-      const { email, password, username } = data;
+      const { email, password, username, country } = data;
 
+      // Authenticate directly with Nakama (creates account if create=true)
       const session = await nkClient.authenticateEmail(
         email,
         password,
@@ -38,29 +42,70 @@ const SignUp: React.FC = () => {
       );
       localStorage.setItem("user_session", JSON.stringify(session));
 
-      const account = await nkClient.getAccount(session);
-      const sessionWithProfile = {
-        ...session,
-        email,
-        username: account.user?.username || username,
-        user_id: account.user?.id,
-        avatarUrl: account.user?.avatar_url || ""
-      };
+      // Update location/country via RPC
+      if (country) {
+        try {
+          await nkClient.rpc(session, "update_user_profile", {
+            username: username,
+            display_name: username,
+            location: country
+          });
+        } catch (locationErr) {
+          console.warn("Failed to set location:", locationErr);
+        }
+      }
 
-      if (session.created) {
-        toast.success("Account created successfully!", toastOptions);
-        localStorage.setItem('logged_user', JSON.stringify(sessionWithProfile))
-        setUser(sessionWithProfile);
-        setTimeout(() => {
-          navigate("/");
-        }, 3000);
-      } else {
-        toast.info("Account already exists. Signing you in...", toastOptions);
-        localStorage.setItem('logged_user', JSON.stringify(sessionWithProfile))
-        setUser(sessionWithProfile);
-        setTimeout(() => {
-          navigate("/");
-        }, 2000);
+      // Get account information via RPC
+      try {
+        const response = await nkClient.rpc(session, "get_user_account", {});
+
+        const result = JSON.parse(
+          typeof response.payload === "string"
+            ? response.payload
+            : JSON.stringify(response.payload)
+        );
+
+        const sessionWithProfile = {
+          ...session,
+          email,
+          username: result.account.user?.username || username,
+          user_id: session.user_id,
+          location: result.account.user?.location || country || ""
+        };
+
+        if (session.created) {
+          toast.success("Account created successfully!", toastOptions);
+          localStorage.setItem('logged_user', JSON.stringify(sessionWithProfile))
+          setUser(sessionWithProfile);
+          setTimeout(() => {
+            navigate("/");
+          }, 3000);
+        } else {
+          toast.info("Account already exists. Signing you in...", toastOptions);
+          localStorage.setItem('logged_user', JSON.stringify(sessionWithProfile))
+          setUser(sessionWithProfile);
+          setTimeout(() => {
+            navigate("/");
+          }, 2000);
+        }
+      } catch (accountErr) {
+        console.warn("Failed to fetch account data, using basic info:", accountErr);
+        const sessionWithBasic = {
+          ...session,
+          email,
+          username: username,
+          user_id: session.user_id,
+          location: country || ""
+        };
+        localStorage.setItem('logged_user', JSON.stringify(sessionWithBasic))
+        setUser(sessionWithBasic);
+
+        if (session.created) {
+          toast.success("Account created successfully!", toastOptions);
+        } else {
+          toast.info("Account already exists. Signing you in...", toastOptions);
+        }
+        setTimeout(() => navigate("/"), 2000);
       }
     } catch (err: any) {
       console.error("Signup error:", err);
@@ -111,6 +156,27 @@ const SignUp: React.FC = () => {
           />
           <Activity mode={errors.username ? "visible" : "hidden"}>
             <p className="text-red-500 text-sm">{errors.username?.message}</p>
+          </Activity>
+        </div>
+
+        <div className="flex flex-col">
+          <label className="font-medium text-black mb-1">Country</label>
+          <select
+            {...register("country", { required: "Country is required" })}
+            className={`border p-2 rounded-md bg-white text-black ${errors.country ? "border-red-500" : "border-black"}`}
+            onChange={(e) => setCountrySearch(e.target.value)}
+          >
+            <option value="">Select your country</option>
+            {countries
+              .filter((c) => c.name.toLowerCase().includes(countrySearch.toLowerCase()))
+              .map((country, index) => (
+                <option key={index} value={country.name}>
+                  {country.flag} {country.name}
+                </option>
+              ))}
+          </select>
+          <Activity mode={errors.country ? "visible" : "hidden"}>
+            <p className="text-red-500 text-sm">{errors.country?.message}</p>
           </Activity>
         </div>
 

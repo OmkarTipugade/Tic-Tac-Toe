@@ -40,7 +40,7 @@ const Home: React.FC = () => {
             type="button"
             onClick={handleMultiplayerClick}
             className="text-lg sm:text-xl md:text-2xl font-semibold 
-                       py-2 px-5 rounded text-white w-full
+                       py-2 px-3 rounded text-white
                        bg-gray-700 hover:bg-gray-900 
                        transition-all duration-200 self-center md:self-start cursor-pointer"
           >

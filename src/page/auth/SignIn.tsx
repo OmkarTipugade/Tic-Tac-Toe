@@ -26,23 +26,39 @@ const SignIn: React.FC = () => {
     try {
       const { email, password } = data;
 
+      // Authenticate directly with Nakama
       const session = await nkClient.authenticateEmail(email, password, false);
       localStorage.setItem("user_session", JSON.stringify(session));
 
+      // Get account information via RPC
       try {
-        const account = await nkClient.getAccount(session);
+        const response = await nkClient.rpc(session, "get_user_account", {});
+
+        const result = JSON.parse(
+          typeof response.payload === "string"
+            ? response.payload
+            : JSON.stringify(response.payload)
+        );
+
         const sessionWithProfile = {
           ...session,
           email,
-          username: account.user?.username || email.split('@')[0],
-          user_id: account.user?.id,
-          avatarUrl: account.user?.avatar_url || ""
+          username: result.account.user?.username || email.split('@')[0],
+          user_id: session.user_id,
+          avatarUrl: result.account.user?.avatar_url || "",
+          location: result.account.user?.location || ""
         };
         localStorage.setItem("logged_user", JSON.stringify(sessionWithProfile));
         setUser(sessionWithProfile);
       } catch (accountErr) {
         console.warn("Failed to fetch account data, using basic info:", accountErr);
-        const sessionWithEmail = { ...session, email };
+        const sessionWithEmail = {
+          ...session,
+          email,
+          username: email.split('@')[0],
+          user_id: session.user_id,
+          location: ""
+        };
         localStorage.setItem("logged_user", JSON.stringify(sessionWithEmail));
         setUser(sessionWithEmail);
       }
