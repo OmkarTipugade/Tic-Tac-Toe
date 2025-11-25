@@ -1,5 +1,4 @@
 import type { PlayerSymbol } from "../types/types";
-import defaultAvatar from "../assets/default-avatar.png";
 const PlayerCard = ({
   avatarUrl,
   player,
@@ -42,7 +41,7 @@ const PlayerCard = ({
         </div>
         <div>
           {avatarUrl && (
-            <img src={avatarUrl || defaultAvatar} alt="user avatar" />
+            <img src={avatarUrl} alt="user avatar" />
           )}
           <p className="font-bold text-lg">
             {player?.username || "Waiting..."}
