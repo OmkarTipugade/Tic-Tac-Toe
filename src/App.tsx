@@ -11,6 +11,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Leaderboard from "./page/Leaderboard";
 import ProfilePage from "./page/ProgilePage";
 import { AuthProvider } from "./context/AuthContext";
+import MultiplayerGame from "./page/MultiplayerGame";
 
 const App: React.FC = () => {
   return (
@@ -31,14 +32,14 @@ const App: React.FC = () => {
           </Route>
 
           <Route element={<ProtectedRoute />}>
-
+            <Route element={<GameLayout />}>
+              <Route path="/multiplayer" element={<MultiplayerGame />} />
+            </Route>
           </Route>
         </Routes>
-
       </BrowserRouter>
     </AuthProvider>
   );
 };
 
 export default App;
-

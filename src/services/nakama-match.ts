@@ -4,20 +4,31 @@ import {
   type Socket,
   type Match,
 } from "@heroiclabs/nakama-js";
-import type { GameState } from "../types/types";
-
-const OP_CODE_MAKE_MOVE = 1;
-const OP_CODE_GAME_UPDATE = 2;
-const OP_CODE_GAME_OVER = 3;
-const OP_CODE_PLAYER_TIMEOUT = 4;
+import type {
+  BackendMessage,
+  MatchPlayer
+} from "../types/types";
 
 type MatchCallbacks = {
-  onGameUpdate?: (gameState: GameState) => void;
-  onGameOver?: (data: {
-    winner: string;
-    reason: string;
-    gameState: GameState;
+  onPlayerJoined?: (player: MatchPlayer) => void;
+  onGameStart?: (data: {
+    players: { [userId: string]: MatchPlayer };
+    currentTurn: string;
+    mode: string;
+    timeLimit?: number;
   }) => void;
+  onMoveMade?: (data: {
+    position: number;
+    symbol: string;
+    board: string[];
+    currentTurn: string;
+  }) => void;
+  onGameOver?: (data: {
+    winner?: string;
+    isDraw: boolean;
+    board: string[];
+  }) => void;
+  onPlayerDisconnected?: (userId: string) => void;
   onError?: (error: string) => void;
 };
 
@@ -47,46 +58,58 @@ export class NakamaMatchService {
     this.socket.onmatchpresence = (presence) => {
       console.log("Match presence update:", presence);
     };
+
+    console.log("Socket connected successfully");
   }
 
   setCallbacks(callbacks: MatchCallbacks): void {
     this.callbacks = callbacks;
   }
 
-  async findMatch(gameMode: "classic" | "timed" = "classic"): Promise<string> {
-    if (!this.socket) {
-      throw new Error("Socket not connected");
-    }
-
-    const response = await this.client.rpc(this.session, "find_match", {
-      mode: gameMode,
-    });
-
-    const payload =
-      typeof response.payload === "string"
-        ? response.payload
-        : JSON.stringify(response.payload);
-    const { matchId } = JSON.parse(payload);
-    await this.joinMatch(matchId);
-    return matchId;
-  }
-
-  async createMatch(
-    gameMode: "classic" | "timed" = "classic"
+  async findMatch(
+    gameMode: "classic" | "timed" = "classic",
+    timeLimit?: number
   ): Promise<string> {
     if (!this.socket) {
       throw new Error("Socket not connected");
     }
 
-    const response = await this.client.rpc(this.session, "create_match", {
+    const payload = {
       mode: gameMode,
-    });
+      ...(timeLimit && { timeLimit }),
+    };
 
-    const payload =
+    const response = await this.client.rpc(this.session, "find_match", payload);
+
+    const payloadStr =
       typeof response.payload === "string"
         ? response.payload
         : JSON.stringify(response.payload);
-    const { matchId } = JSON.parse(payload);
+    const { matchId } = JSON.parse(payloadStr);
+    await this.joinMatch(matchId);
+    return matchId;
+  }
+
+  async createMatch(
+    gameMode: "classic" | "timed" = "classic",
+    timeLimit?: number
+  ): Promise<string> {
+    if (!this.socket) {
+      throw new Error("Socket not connected");
+    }
+
+    const payload = {
+      mode: gameMode,
+      ...(timeLimit && { timeLimit }),
+    };
+
+    const response = await this.client.rpc(this.session, "create_match", payload);
+
+    const payloadStr =
+      typeof response.payload === "string"
+        ? response.payload
+        : JSON.stringify(response.payload);
+    const { matchId } = JSON.parse(payloadStr);
     await this.joinMatch(matchId);
     return matchId;
   }
@@ -100,15 +123,20 @@ export class NakamaMatchService {
     console.log("Joined match:", matchId);
   }
 
-  async makeMove(row: number, col: number): Promise<void> {
+  async makeMove(position: number): Promise<void> {
     if (!this.socket || !this.currentMatch) {
       throw new Error("Not in a match");
     }
 
-    const moveData = JSON.stringify({ row, col });
+    // Backend expects { type: 'move', position: number }
+    const moveData = JSON.stringify({
+      type: 'move',
+      position
+    });
+
     await this.socket.sendMatchState(
       this.currentMatch.match_id,
-      OP_CODE_MAKE_MOVE,
+      0, // op_code
       moveData
     );
   }
@@ -118,34 +146,6 @@ export class NakamaMatchService {
 
     await this.socket.leaveMatch(this.currentMatch.match_id);
     this.currentMatch = null;
-  }
-
-  async getPlayerStats(): Promise<{
-    wins: number;
-    losses: number;
-    draws: number;
-    score: number;
-  }> {
-    const response = await this.client.rpc(
-      this.session,
-      "get_player_stats",
-      {}
-    );
-    const payload =
-      typeof response.payload === "string"
-        ? response.payload
-        : JSON.stringify(response.payload);
-    return JSON.parse(payload);
-  }
-
-  async getLeaderboard(limit: number = 10): Promise<any> {
-    const result = await this.client.listLeaderboardRecords(
-      this.session,
-      "global_leaderboard",
-      [],
-      limit
-    );
-    return result;
   }
 
   disconnect(): void {
@@ -158,29 +158,68 @@ export class NakamaMatchService {
 
   private handleMatchData(matchData: any): void {
     try {
-      const data = JSON.parse(matchData.data);
+      // The data comes as a Uint8Array, need to decode it
+      let data: BackendMessage;
 
-      switch (matchData.op_code) {
-        case OP_CODE_GAME_UPDATE:
-          if (this.callbacks.onGameUpdate) {
-            this.callbacks.onGameUpdate(data);
+      if (matchData.data instanceof Uint8Array) {
+        const decoder = new TextDecoder();
+        const dataStr = decoder.decode(matchData.data);
+        data = JSON.parse(dataStr);
+      } else if (typeof matchData.data === 'string') {
+        data = JSON.parse(matchData.data);
+      } else {
+        data = matchData.data;
+      }
+
+      console.log("Received match data:", data);
+
+      switch (data.type) {
+        case 'player_joined':
+          if (this.callbacks.onPlayerJoined) {
+            this.callbacks.onPlayerJoined(data.player);
           }
           break;
 
-        case OP_CODE_GAME_OVER:
+        case 'game_start':
+          if (this.callbacks.onGameStart) {
+            this.callbacks.onGameStart({
+              players: data.players,
+              currentTurn: data.currentTurn,
+              mode: data.mode,
+              timeLimit: data.timeLimit,
+            });
+          }
+          break;
+
+        case 'move_made':
+          if (this.callbacks.onMoveMade) {
+            this.callbacks.onMoveMade({
+              position: data.position,
+              symbol: data.symbol,
+              board: data.board,
+              currentTurn: data.currentTurn,
+            });
+          }
+          break;
+
+        case 'game_over':
           if (this.callbacks.onGameOver) {
-            this.callbacks.onGameOver(data);
+            this.callbacks.onGameOver({
+              winner: data.winner,
+              isDraw: data.isDraw,
+              board: data.board,
+            });
           }
           break;
 
-        case OP_CODE_PLAYER_TIMEOUT:
-          if (this.callbacks.onError) {
-            this.callbacks.onError("Player timeout");
+        case 'player_disconnected':
+          if (this.callbacks.onPlayerDisconnected) {
+            this.callbacks.onPlayerDisconnected(data.userId);
           }
           break;
 
         default:
-          console.log("Unknown op code:", matchData.op_code);
+          console.log("Unknown message type:", (data as any).type);
       }
     } catch (error) {
       console.error("Error handling match data:", error);
@@ -196,5 +235,9 @@ export class NakamaMatchService {
 
   isConnected(): boolean {
     return this.socket !== null;
+  }
+
+  getSession(): Session {
+    return this.session;
   }
 }

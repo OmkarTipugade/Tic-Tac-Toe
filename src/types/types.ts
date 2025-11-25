@@ -60,4 +60,88 @@ interface Moves {
   result: MoveResult;
 }
 
-export type { Board, Player, GameState, Moves, MoveResult, PlayerSymbol, PlayerInfo };
+// Multiplayer-specific types
+interface MatchPlayer {
+  userId: string;
+  username: string;
+  symbol: 'X' | 'O';
+}
+
+interface MultiplayerGameState {
+  board: string[]; // Backend uses flat array of 9 elements
+  currentTurn: string; // userId
+  players: { [userId: string]: MatchPlayer };
+  playerSymbols: { [userId: string]: string };
+  winner: string | null;
+  isDraw: boolean;
+  gameStarted: boolean;
+  mode: string;
+  timeLimit?: number;
+  moveCount: number;
+}
+
+type BackendMessageType =
+  | 'player_joined'
+  | 'game_start'
+  | 'move_made'
+  | 'game_over'
+  | 'player_disconnected';
+
+interface PlayerJoinedMessage {
+  type: 'player_joined';
+  player: MatchPlayer;
+}
+
+interface GameStartMessage {
+  type: 'game_start';
+  players: { [userId: string]: MatchPlayer };
+  currentTurn: string;
+  mode: string;
+  timeLimit?: number;
+}
+
+interface MoveMadeMessage {
+  type: 'move_made';
+  position: number;
+  symbol: string;
+  board: string[];
+  currentTurn: string;
+}
+
+interface GameOverMessage {
+  type: 'game_over';
+  winner?: string;
+  board: string[];
+  isDraw: boolean;
+}
+
+interface PlayerDisconnectedMessage {
+  type: 'player_disconnected';
+  userId: string;
+}
+
+type BackendMessage =
+  | PlayerJoinedMessage
+  | GameStartMessage
+  | MoveMadeMessage
+  | GameOverMessage
+  | PlayerDisconnectedMessage;
+
+export type {
+  Board,
+  Player,
+  GameState,
+  Moves,
+  MoveResult,
+  PlayerSymbol,
+  PlayerInfo,
+  MatchPlayer,
+  MultiplayerGameState,
+  BackendMessage,
+  BackendMessageType,
+  PlayerJoinedMessage,
+  GameStartMessage,
+  MoveMadeMessage,
+  GameOverMessage,
+  PlayerDisconnectedMessage
+};
