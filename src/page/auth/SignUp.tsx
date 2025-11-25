@@ -110,7 +110,7 @@ const SignUp: React.FC = () => {
     } catch (err: any) {
       console.error("Signup error:", err);
 
-      if (err.message && err.message.includes("already exists")) {
+      if (err.status ===400) {
         toast.error("User already exists. Please sign in instead.", toastOptions);
         setTimeout(() => navigate("/sign-in"), 2000);
       } else if (err.status === 409) {
