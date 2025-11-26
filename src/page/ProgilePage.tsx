@@ -23,13 +23,6 @@ type PlayerStats = {
   bestWinStreak: number;
 };
 
-type GameHistory = {
-  id: string;
-  opponent: string;
-  result: "win" | "loss" | "draw";
-  date: string;
-  mode: string;
-};
 
 const PRESET_AVATARS = [avatar1, avatar2, avatar3, avatar4, avatar5, avatar6, avatar7, avatar8];
 
@@ -37,7 +30,6 @@ const ProfilePage: React.FC = () => {
   const { user, setUser } = useAuth();
   const [account, setAccount] = useState<AccountInfo | null>(null);
   const [stats, setStats] = useState<PlayerStats | null>(null);
-  const [gameHistory, setGameHistory] = useState<GameHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<string>("");
@@ -118,7 +110,6 @@ const ProfilePage: React.FC = () => {
           });
         }
 
-        setGameHistory([]);
       } catch (err) {
         console.error("Failed to load profile", err);
       } finally {
@@ -533,48 +524,6 @@ const ProfilePage: React.FC = () => {
               </p>
             )}
           </div>
-        </div>
-
-        <div className="mt-10">
-          <h2 className="text-2xl font-bold mb-6 text-black">Game History</h2>
-
-          {gameHistory.length > 0 ? (
-            <div className="space-y-3">
-              {gameHistory.map((game) => (
-                <div
-                  key={game.id}
-                  className="border-2 border-black rounded-lg p-4 bg-white hover:bg-gray-50 transition"
-                >
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-semibold text-black">
-                        vs {game.opponent}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        {game.mode} • {game.date}
-                      </p>
-                    </div>
-                    <div
-                      className={`px-4 py-2 rounded-lg font-bold ${game.result === "win"
-                        ? "bg-green-100 text-green-700"
-                        : game.result === "loss"
-                          ? "bg-red-100 text-red-700"
-                          : "bg-gray-100 text-gray-700"
-                        }`}
-                    >
-                      {game.result.toUpperCase()}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-              <p className="text-gray-600">
-                No game history yet. Start playing to build your record!
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>

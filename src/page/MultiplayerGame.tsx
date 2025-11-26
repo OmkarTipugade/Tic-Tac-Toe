@@ -44,7 +44,7 @@ const MultiplayerGame: React.FC = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Get my player info
+  // Get my info
   const myPlayer = myUserId ? players[myUserId] : null;
   const mySymbol = myPlayer?.symbol;
 
@@ -80,6 +80,7 @@ const MultiplayerGame: React.FC = () => {
 
   // Helper function to update player stats
   const updatePlayerStats = async (isWin: boolean, isDraw: boolean, session: any) => {
+    console.log('📊 updatePlayerStats called:', { isWin, isDraw, hasSession: !!session });
     try {
       const response = await nkClient.rpc(session, 'update_player_stats', {
         isWin,
@@ -87,6 +88,7 @@ const MultiplayerGame: React.FC = () => {
       });
 
       const payload = typeof response.payload === 'string' ? JSON.parse(response.payload) : response.payload;
+      console.log('📊 Stats update response:', payload);
 
       if (payload.success && payload.stats) {
         const stats = payload.stats;
@@ -97,9 +99,11 @@ const MultiplayerGame: React.FC = () => {
           ...stats,
           winPercentage
         };
+      } else {
+        console.error('❌ Stats update failed:', payload.error || 'Unknown error');
       }
     } catch (error) {
-      console.error('Failed to update player stats:', error);
+      console.error('❌ Failed to update player stats:', error);
     }
 
     return null;
@@ -153,7 +157,7 @@ const MultiplayerGame: React.FC = () => {
       // Set up callbacks for real-time updates
       matchService.setCallbacks({
         onPlayerJoined: async (player) => {
-          console.log('Player joined:', player);
+          console.log('=== PLAYER JOINED ===', player);
           setPlayers(prev => ({
             ...prev,
             [player.userId]: player
@@ -161,6 +165,7 @@ const MultiplayerGame: React.FC = () => {
 
           // Fetch stats for the joined player
           const stats = await fetchPlayerStats(player.userId, session);
+          console.log('📊 Stats for joined player', player.userId, ':', stats);
           setPlayerStats(prev => ({
             ...prev,
             [player.userId]: stats
@@ -168,36 +173,69 @@ const MultiplayerGame: React.FC = () => {
 
           // Fetch avatar from user account
           try {
-            const response = await nkClient.rpc(session, 'get_user_account', {});
+            console.log('👤 Fetching avatar for', player.userId);
+            const response = await nkClient.rpc(session, 'get_user_account_by_id', {
+              userId: player.userId
+            });
             const payloadStr = typeof response.payload === 'string' ? response.payload : JSON.stringify(response.payload);
             const payload = JSON.parse(payloadStr);
+
+            console.log('👤 Avatar response:', payload);
 
             if (payload.success && payload.account.user.avatar_url) {
               setPlayerAvatars(prev => ({
                 ...prev,
                 [player.userId]: payload.account.user.avatar_url
               }));
+              console.log('✅ Avatar set for', player.userId);
+            } else {
+              console.log('⚠️ No avatar for', player.userId);
             }
           } catch (error) {
-            console.error('Failed to fetch avatar:', error);
+            console.error('❌ Failed to fetch avatar:', error);
           }
         },
         onGameStart: async (data) => {
-          console.log('Game started:', data);
+          console.log('=== GAME START ===', data);
           setPlayers(data.players);
           setCurrentTurn(data.currentTurn);
           setGameStatus('playing');
           setMoveStartTime(Date.now());
 
-          // Fetch stats for all players
+          // Fetch stats AND avatars for ALL players
           for (const userId of Object.keys(data.players)) {
-            const stats
+            console.log('🔍 Fetching data for player:', userId);
 
-              = await fetchPlayerStats(userId, session);
+            // Fetch stats
+            const stats = await fetchPlayerStats(userId, session);
+            console.log('📊 Stats fetched for', userId, ':', stats);
             setPlayerStats(prev => ({
               ...prev,
               [userId]: stats
             }));
+
+            // Fetch avatar
+            try {
+              const response = await nkClient.rpc(session, 'get_user_account_by_id', {
+                userId: userId
+              });
+              const payloadStr = typeof response.payload === 'string' ? response.payload : JSON.stringify(response.payload);
+              const payload = JSON.parse(payloadStr);
+
+              console.log('👤 Avatar response for', userId, ':', payload);
+
+              if (payload.success && payload.account.user.avatar_url) {
+                setPlayerAvatars(prev => ({
+                  ...prev,
+                  [userId]: payload.account.user.avatar_url
+                }));
+                console.log('✅ Avatar set for', userId, ':', payload.account.user.avatar_url);
+              } else {
+                console.log('⚠️ No avatar URL for', userId);
+              }
+            } catch (error) {
+              console.error('❌ Failed to fetch avatar for', userId, error);
+            }
           }
 
           toast.success('Game started! Good luck!');
@@ -226,7 +264,13 @@ const MultiplayerGame: React.FC = () => {
           setCurrentTurn(data.currentTurn);
         },
         onGameOver: async (data) => {
-          console.log('Game over:', data);
+          console.log('=== GAME OVER ===', {
+            winner: data.winner,
+            isDraw: data.isDraw,
+            myUserId,
+            sessionExists: !!session
+          });
+
           setBoard(data.board);
           setWinner(data.winner || null);
           setIsDraw(data.isDraw);
@@ -235,7 +279,9 @@ const MultiplayerGame: React.FC = () => {
           // Update stats for both players
           if (data.isDraw) {
             // Both players get +7 for draw
+            console.log('📊 Updating stats for DRAW');
             const updatedStats = await updatePlayerStats(false, true, session);
+            console.log('📊 Draw stats result:', updatedStats);
             if (updatedStats) {
               setPlayerStats(prev => ({
                 ...prev,
@@ -245,7 +291,9 @@ const MultiplayerGame: React.FC = () => {
             toast.info("It's a draw! +7 points");
           } else if (data.winner === myUserId) {
             // Winner gets +15
+            console.log('📊 Updating stats for WIN');
             const updatedStats = await updatePlayerStats(true, false, session);
+            console.log('📊 Win stats result:', updatedStats);
             if (updatedStats) {
               setPlayerStats(prev => ({
                 ...prev,
@@ -255,7 +303,9 @@ const MultiplayerGame: React.FC = () => {
             toast.success('You won! +15 points 🎉');
           } else {
             // Loser gets -15
+            console.log('📊 Updating stats for LOSS');
             const updatedStats = await updatePlayerStats(false, false, session);
+            console.log('📊 Loss stats result:', updatedStats);
             if (updatedStats) {
               setPlayerStats(prev => ({
                 ...prev,
@@ -480,8 +530,8 @@ const MultiplayerGame: React.FC = () => {
           {/* Timer Display for Timed Mode */}
           {gameMode === 'timed' && isMyTurn && timeRemaining !== null && gameStatus === 'playing' && (
             <div className={`text-center mb-4 p-3 rounded-lg border-2 ${timeRemaining <= 5
-                ? 'border-red-500 bg-red-50 animate-pulse'
-                : 'border-blue-500 bg-blue-50'
+              ? 'border-red-500 bg-red-50 animate-pulse'
+              : 'border-blue-500 bg-blue-50'
               }`}>
               <p className={`text-lg font-bold ${timeRemaining <= 5 ? 'text-red-700' : 'text-blue-700'
                 }`}>

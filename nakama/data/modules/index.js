@@ -100,6 +100,54 @@ function rpcGetUserAccount(ctx, logger, nk, payload) {
     }
 }
 
+// RPC to get user account by ID (for fetching other players' info)
+function rpcGetUserAccountById(ctx, logger, nk, payload) {
+    try {
+        const params = JSON.parse(payload);
+        const targetUserId = params.userId;
+
+        if (!targetUserId) {
+            logger.error('Get account by ID failed: No userId provided');
+            return JSON.stringify({
+                success: false,
+                error: 'No userId provided'
+            });
+        }
+
+        logger.info('Getting account for user: ' + targetUserId);
+
+        const account = nk.accountGetId(targetUserId);
+
+        if (!account || !account.user) {
+            logger.error('Failed to retrieve account for user: ' + targetUserId);
+            return JSON.stringify({
+                success: false,
+                error: 'Failed to retrieve account'
+            });
+        }
+
+        return JSON.stringify({
+            success: true,
+            account: {
+                user: {
+                    id: targetUserId,
+                    username: account.user.username || '',
+                    display_name: account.user.displayName || '',
+                    avatar_url: account.user.avatarUrl || '',
+                    location: account.user.location || '',
+                    email: account.email || ''
+                }
+            }
+        });
+    } catch (e) {
+        logger.error('Failed to get account by ID: ' + e);
+        return JSON.stringify({
+            success: false,
+            error: String(e)
+        });
+    }
+}
+
 // RPC to update user profile
 function rpcUpdateUserProfile(ctx, logger, nk, payload) {
     try {
@@ -203,7 +251,8 @@ function rpcGetPlayerStats(ctx, logger, nk, payload) {
         };
 
         if (objects.length > 0 && objects[0].value) {
-            stats = JSON.parse(objects[0].value);
+            // Value is stored as object, not string
+            stats = objects[0].value;
         }
 
         logger.info('Retrieved stats for user ' + userId + ': ' + JSON.stringify(stats));
@@ -286,7 +335,7 @@ function rpcUpdatePlayerStats(ctx, logger, nk, payload) {
             collection: 'player_stats',
             key: 'stats',
             userId: userId,
-            value: JSON.stringify(stats),
+            value: stats,
             permissionRead: 1,
             permissionWrite: 0
         }];
@@ -567,6 +616,7 @@ function InitModule(ctx, logger, nk, initializer) {
     initializer.registerRpc('create_match', rpcCreateMatch);
     initializer.registerRpc('find_match', rpcFindMatch);
     initializer.registerRpc('get_user_account', rpcGetUserAccount);
+    initializer.registerRpc('get_user_account_by_id', rpcGetUserAccountById);
     initializer.registerRpc('update_user_profile', rpcUpdateUserProfile);
     initializer.registerRpc('get_player_stats', rpcGetPlayerStats);
     initializer.registerRpc('update_player_stats', rpcUpdatePlayerStats);
