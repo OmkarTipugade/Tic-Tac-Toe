@@ -18,7 +18,6 @@ type SignUpForm = {
 const SignUp: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [countrySearch, setCountrySearch] = useState("");
   const { setUser } = useAuth();
 
   const {
@@ -110,7 +109,7 @@ const SignUp: React.FC = () => {
     } catch (err: any) {
       console.error("Signup error:", err);
 
-      if (err.status ===400) {
+      if (err.status === 400) {
         toast.error("User already exists. Please sign in instead.", toastOptions);
         setTimeout(() => navigate("/sign-in"), 2000);
       } else if (err.status === 409) {
@@ -161,14 +160,16 @@ const SignUp: React.FC = () => {
 
         <div className="flex flex-col">
           <label className="font-medium text-black mb-1">Country</label>
+
           <select
             {...register("country", { required: "Country is required" })}
-            className={`border p-2 rounded-md bg-white text-black ${errors.country ? "border-red-500" : "border-black"}`}
-            onChange={(e) => setCountrySearch(e.target.value)}
+            className={`border p-2 rounded-md bg-white text-black ${errors.country ? "border-red-500" : "border-black"
+              }`}
           >
             <option value="">Select your country</option>
             {countries
-              .filter((c) => c.name.toLowerCase().includes(countrySearch.toLowerCase()))
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name))
               .map((country, index) => (
                 <option key={index} value={country.name}>
                   {country.flag} {country.name}
@@ -179,7 +180,7 @@ const SignUp: React.FC = () => {
             <p className="text-red-500 text-sm">{errors.country?.message}</p>
           </Activity>
         </div>
-
+        
         <div className="flex flex-col">
           <label className="font-medium text-black mb-1">Email</label>
           <input
