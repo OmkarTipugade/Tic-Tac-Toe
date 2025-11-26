@@ -344,7 +344,8 @@ function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
                     };
                     dispatcher.broadcastMessage(0, JSON.stringify(gameOverMessage));
                     logger.info('Game over! Winner: ' + message.sender.username);
-                    return { state: state };
+                    // Return null to terminate the match
+                    return null;
                 }
 
                 // Check for draw
@@ -357,7 +358,8 @@ function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
                     };
                     dispatcher.broadcastMessage(0, JSON.stringify(gameOverMessage));
                     logger.info('Game over! Draw');
-                    return { state: state };
+                    // Return null to terminate the match
+                    return null;
                 }
 
                 // Switch turns

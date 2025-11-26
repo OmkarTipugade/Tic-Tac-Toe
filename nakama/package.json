@@ -13,8 +13,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "nakama-runtime": "github:heroiclabs/nakama-common",
-    "nodemon": "^3.1.11"
+    "nakama-runtime": "github:heroiclabs/nakama-common"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
