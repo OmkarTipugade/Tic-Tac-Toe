@@ -7,7 +7,6 @@ interface MoveSummaryProps {
 }
 
 const MoveSummary: React.FC<MoveSummaryProps> = ({ moves, gameMode }) => {
-  const lastMove = moves[moves.length - 1];
 
   return (
     <div className="w-full max-w-md mx-auto mt-4 bg-white border border-black p-4 rounded-lg shadow-[4px_4px_0px_0px_black]">
@@ -19,46 +18,32 @@ const MoveSummary: React.FC<MoveSummaryProps> = ({ moves, gameMode }) => {
         Mode: <span className="font-semibold capitalize">{gameMode}</span>
       </p>
 
-      {lastMove ? (
-        <div className="mb-4 text-sm text-black">
-          <p>
-            <span className="font-semibold">Last Move #</span> {lastMove.moveNo}{" "}
-            by <strong>{lastMove.player}</strong>
-          </p>
-          <p>
-            Position:{" "}
-            {lastMove.row !== null && lastMove.col !== null
-              ? `(${lastMove.row + 1}, ${lastMove.col + 1})`
-              : "Timeout / No move"}
-          </p>
-          <p>Time taken: {lastMove.timeTaken.toFixed(2)}s</p>
-          <p>
-            Result: <span className="capitalize">{lastMove.result}</span>
-          </p>
-        </div>
-      ) : (
-        <p className="text-sm text-gray-700 text-center mb-4">
-          No moves yet. Start playing!
-        </p>
-      )}
-
       {moves.length > 0 && (
         <>
-          <h3 className="text-sm font-semibold mb-2 text-black">History</h3>
-          <div className="max-h-40 overflow-y-auto text-xs border border-black rounded p-2 bg-white">
-            {moves.map((m) => (
+          <h3 className="text-sm font-semibold mb-2 text-black">Move History</h3>
+          <div className="max-h-40 overflow-y-auto text-xs border border-black rounded bg-white">
+            {/* Column Headings */}
+            <div className="flex justify-between py-2 px-2 border-b-2 border-black bg-gray-100 font-bold text-black sticky top-0">
+              <span className="w-16">Move #</span>
+              <span className="w-16">Player</span>
+              <span className="w-20">Position</span>
+              <span className="w-24">Time Taken</span>
+            </div>
+
+            {/* Move Rows */}
+            {moves.map((m, index) => (
               <div
-                key={m.moveNo}
-                className="flex justify-between py-1 border-b border-black last:border-b-0 text-black"
+                key={index}
+                className="flex justify-between py-1 px-2 border-b border-gray-300 last:border-b-0 text-black hover:bg-gray-50"
               >
-                <span># {m.moveNo}</span>
-                <span>Player {m.player}</span>
-                <span>
+                <span className="w-16">#{m.moveNo}</span>
+                <span className="w-16">{m.player}</span>
+                <span className="w-20">
                   {m.row !== null && m.col !== null
                     ? `(${m.row + 1}, ${m.col + 1})`
                     : "Timeout"}
                 </span>
-                <span>{m.timeTaken.toFixed(2)}s</span>
+                <span className="w-24">{m.timeTaken.toFixed(2)}s</span>
               </div>
             ))}
           </div>

@@ -271,6 +271,60 @@ function rpcGetPlayerStats(ctx, logger, nk, payload) {
     }
 }
 
+// RPC to get player stats by ID (for fetching other players' stats)
+function rpcGetPlayerStatsById(ctx, logger, nk, payload) {
+    try {
+        const params = typeof payload === 'string' ? JSON.parse(payload) : payload;
+        const targetUserId = params.userId;
+
+        if (!targetUserId) {
+            logger.error('Get player stats by ID failed: No userId provided');
+            return JSON.stringify({
+                success: false,
+                error: 'No userId provided'
+            });
+        }
+
+        logger.info('Getting stats for user: ' + targetUserId);
+
+        // Read player stats from storage
+        const objectIds = [{
+            collection: 'player_stats',
+            key: 'stats',
+            userId: targetUserId
+        }];
+
+        const objects = nk.storageRead(objectIds);
+
+        let stats = {
+            score: 0,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            winStreak: 0
+        };
+
+        if (objects.length > 0 && objects[0].value) {
+            // Value is stored as object, not string
+            stats = objects[0].value;
+        }
+
+        logger.info('Retrieved stats for user ' + targetUserId + ': ' + JSON.stringify(stats));
+
+        return JSON.stringify({
+            success: true,
+            stats: stats
+        });
+
+    } catch (e) {
+        logger.error('Failed to get player stats by ID: ' + e);
+        return JSON.stringify({
+            success: false,
+            error: String(e)
+        });
+    }
+}
+
 // RPC to update player stats after game
 function rpcUpdatePlayerStats(ctx, logger, nk, payload) {
     try {
@@ -627,6 +681,7 @@ function InitModule(ctx, logger, nk, initializer) {
     initializer.registerRpc('get_user_account_by_id', rpcGetUserAccountById);
     initializer.registerRpc('update_user_profile', rpcUpdateUserProfile);
     initializer.registerRpc('get_player_stats', rpcGetPlayerStats);
+    initializer.registerRpc('get_player_stats_by_id', rpcGetPlayerStatsById);
     initializer.registerRpc('update_player_stats', rpcUpdatePlayerStats);
 
     // Register match handler

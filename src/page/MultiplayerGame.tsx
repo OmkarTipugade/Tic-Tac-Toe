@@ -57,9 +57,14 @@ const MultiplayerGame: React.FC = () => {
 
   // Helper function to fetch player stats
   const fetchPlayerStats = async (userId: string, session: any): Promise<PlayerStats> => {
+    console.log('🔍 Fetching stats for userId:', userId);
     try {
-      const response = await nkClient.rpc(session, 'get_player_stats', {});
+      const response = await nkClient.rpc(session, 'get_player_stats_by_id', {
+        userId: userId
+      });
       const payload = typeof response.payload === 'string' ? JSON.parse(response.payload) : response.payload;
+
+      console.log('📊 Stats response for', userId, ':', payload);
 
       if (payload.success && payload.stats) {
         const stats = payload.stats;
@@ -72,7 +77,7 @@ const MultiplayerGame: React.FC = () => {
         };
       }
     } catch (error) {
-      console.error('Failed to fetch player stats:', error);
+      console.error('❌ Failed to fetch player stats:', error);
     }
 
     return { score: 0, wins: 0, losses: 0, draws: 0, winStreak: 0, winPercentage: 0 };
@@ -202,6 +207,9 @@ const MultiplayerGame: React.FC = () => {
           setGameStatus('playing');
           setMoveStartTime(Date.now());
 
+          // Reset moves for new game
+          setMoves([]);
+
           // Fetch stats AND avatars for ALL players
           for (const userId of Object.keys(data.players)) {
             console.log('🔍 Fetching data for player:', userId);
@@ -247,7 +255,8 @@ const MultiplayerGame: React.FC = () => {
           // Track move for Timed mode
           if (mode === 'timed') {
             const timeTaken = (Date.now() - moveStartTime) / 1000;
-            const moveNumber = moves.length + 1;
+            // Calculate move number based on how many cells are filled (unique across both players)
+            const moveNumber = data.board.filter(cell => cell !== '').length;
             const playerSymbol = data.symbol as 'X' | 'O';
 
             setMoves(prev => [...prev, {
@@ -258,6 +267,8 @@ const MultiplayerGame: React.FC = () => {
               timeTaken,
               result: 'normal'
             }]);
+
+            // Reset timer for next move
             setMoveStartTime(Date.now());
           }
 
@@ -288,6 +299,20 @@ const MultiplayerGame: React.FC = () => {
                 [myUserId]: updatedStats
               }));
             }
+
+            // Refetch opponent's stats (they also got +7)
+            // Add delay to ensure opponent's backend has updated their stats
+            if (opponentId) {
+              console.log('🔄 Waiting to refetch opponent stats...');
+              await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
+              console.log('🔍 Refetching opponent stats for:', opponentId);
+              const opponentStats = await fetchPlayerStats(opponentId, session);
+              console.log('✅ Opponent stats updated:', opponentStats);
+              setPlayerStats(prev => ({
+                ...prev,
+                [opponentId]: opponentStats
+              }));
+            }
             toast.info("It's a draw! +7 points");
           } else if (data.winner === myUserId) {
             // Winner gets +15
@@ -300,6 +325,20 @@ const MultiplayerGame: React.FC = () => {
                 [myUserId]: updatedStats
               }));
             }
+
+            // Refetch opponent's stats (they got -15)
+            // Add delay to ensure opponent's backend has updated their stats
+            if (opponentId) {
+              console.log('🔄 Waiting to refetch opponent stats...');
+              await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
+              console.log('🔍 Refetching opponent stats for:', opponentId);
+              const opponentStats = await fetchPlayerStats(opponentId, session);
+              console.log('✅ Opponent stats updated:', opponentStats);
+              setPlayerStats(prev => ({
+                ...prev,
+                [opponentId]: opponentStats
+              }));
+            }
             toast.success('You won! +15 points 🎉');
           } else {
             // Loser gets -15
@@ -310,6 +349,20 @@ const MultiplayerGame: React.FC = () => {
               setPlayerStats(prev => ({
                 ...prev,
                 [myUserId]: updatedStats
+              }));
+            }
+
+            // Refetch opponent's stats (they got +15)
+            // Add delay to ensure opponent's backend has updated their stats
+            if (opponentId) {
+              console.log('🔄 Waiting to refetch opponent stats...');
+              await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
+              console.log('🔍 Refetching opponent stats for:', opponentId);
+              const opponentStats = await fetchPlayerStats(opponentId, session);
+              console.log('✅ Opponent stats updated:', opponentStats);
+              setPlayerStats(prev => ({
+                ...prev,
+                [opponentId]: opponentStats
               }));
             }
             toast.info('You lost. -15 points. Better luck next time!');
