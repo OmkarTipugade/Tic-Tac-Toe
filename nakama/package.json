@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "dev": "tsc src/main.ts &&nodemon src/main.js",
-    "build": "tsc",
+    "build": "tsc && cp build/main.js data/modules/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

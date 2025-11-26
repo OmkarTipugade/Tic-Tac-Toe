@@ -1,3 +1,4 @@
+/// <reference types="nakama-runtime" />
 function InitModule(ctx, logger, nk, initializer) {
     // Register RPC functions
     initializer.registerRpc('create_match', rpcCreateMatch);
@@ -39,13 +40,20 @@ function rpcFindMatch(ctx, logger, nk, payload) {
     logger.info(`Finding match for mode: ${mode}, timeLimit: ${timeLimit}`);
     const limit = 10;
     const matches = nk.matchList(limit, true, '', 0, 2, '*');
+    logger.info(`matchList returned ${matches.length} matches`);
     // Find a match with less than 2 players and matching mode/timeLimit
     for (const match of matches) {
+        logger.info(`Checking match ${match.matchId}: size=${match.size}, label=${match.label}`);
         if (match.size < 2) {
             // Try to parse the match label to check mode/timeLimit
             try {
                 const label = JSON.parse(match.label || '{}');
-                if (label.mode === mode && label.timeLimit === timeLimit) {
+                // Normalize timeLimit for comparison
+                // For Classic mode, treat undefined/null as null for consistent matching
+                const normalizedSearchTime = (mode === 'classic') ? null : timeLimit;
+                const normalizedLabelTime = (label.mode === 'classic') ? null : label.timeLimit;
+                logger.info(`Checking match ${match.matchId}: label.mode=${label.mode}, mode=${mode}, normalizedLabelTime=${normalizedLabelTime}, normalizedSearchTime=${normalizedSearchTime}`);
+                if (label.mode === mode && normalizedLabelTime === normalizedSearchTime) {
                     logger.info('Found available match: ' + match.matchId);
                     return JSON.stringify({ matchId: match.matchId });
                 }
@@ -122,10 +130,7 @@ function rpcUpdateUserProfile(ctx, logger, nk, payload) {
         display_name || undefined, // displayName
         avatar_url || undefined, // avatarUrl
         undefined, // langTag
-        undefined, // location
-        undefined, // timezone
-        undefined // metadata
-        );
+        undefined);
         // Fetch updated data
         const account = nk.accountGetId(userId);
         if (!account || !account.user) {
