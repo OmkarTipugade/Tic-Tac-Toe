@@ -1,4 +1,6 @@
 import type { PlayerSymbol } from "../types/types";
+import defaultAvatar from "../assets/default-avatar.png";
+
 const PlayerCard = ({
   avatarUrl,
   player,
@@ -6,22 +8,25 @@ const PlayerCard = ({
   isCurrentTurn,
   isYou,
   score = 0,
+  winPercentage = 0,
+  winStreak = 0,
 }: {
-  avatarUrl: string;
+  avatarUrl?: string;
   player: { userId: string; username: string } | null;
   symbol: PlayerSymbol;
   isCurrentTurn: boolean;
   isYou: boolean;
   score?: number;
+  winPercentage?: number;
+  winStreak?: number;
 }) => (
   <div
     className={`
         p-6 rounded-xl border-4 transition-all duration-300
-        ${
-          isCurrentTurn
-            ? "border-green-500 bg-green-50 shadow-lg scale-105"
-            : "border-gray-300 bg-white"
-        }
+        ${isCurrentTurn
+        ? "border-green-500 bg-green-50 shadow-lg scale-105"
+        : "border-gray-300 bg-white"
+      }
         ${!player ? "opacity-50" : ""}
       `}
   >
@@ -30,26 +35,35 @@ const PlayerCard = ({
         <div
           className={`
               w-12 h-12 rounded-full flex items-center justify-center text-2xl font-bold
-              ${
-                symbol === "X"
-                  ? "bg-blue-500 text-white"
-                  : "bg-red-500 text-white"
-              }
+              ${symbol === "X"
+              ? "bg-blue-500 text-white"
+              : "bg-red-500 text-white"
+            }
             `}
         >
           {symbol}
         </div>
         <div>
-          {avatarUrl && (
-            <img src={avatarUrl} alt="user avatar" />
+          <div className="flex items-center gap-2 mb-1">
+            <img
+              src={avatarUrl || defaultAvatar}
+              alt="user avatar"
+              className="w-8 h-8 rounded-full object-cover border-2 border-gray-300"
+            />
+            <p className="font-bold text-lg">
+              {player?.username || "Waiting..."}
+              {isYou && <span className="text-sm text-gray-500 ml-2">(You)</span>}
+            </p>
+          </div>
+          {player && (
+            <div className="text-sm text-gray-700">
+              <p className="font-semibold">Score: {score}</p>
+              <p>Win Rate: {winPercentage.toFixed(1)}%</p>
+              {winStreak > 0 && <p className="text-green-600">🔥 Streak: {winStreak}</p>}
+            </div>
           )}
-          <p className="font-bold text-lg">
-            {player?.username || "Waiting..."}
-            {isYou && <span className="text-sm text-gray-500 ml-2">(You)</span>}
-          </p>
-          <p className="text-sm font-semibold text-gray-700">Score: {score}</p>
           {isCurrentTurn && player && (
-            <p className="text-sm text-green-600 font-semibold">Your turn!</p>
+            <p className="text-sm text-green-600 font-semibold mt-1">Your turn!</p>
           )}
         </div>
       </div>

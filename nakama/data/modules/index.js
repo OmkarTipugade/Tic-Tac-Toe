@@ -172,6 +172,144 @@ function rpcUpdateUserProfile(ctx, logger, nk, payload) {
     }
 }
 
+// RPC to get player stats
+function rpcGetPlayerStats(ctx, logger, nk, payload) {
+    try {
+        const userId = ctx.userId;
+
+        if (!userId) {
+            logger.error('Get player stats failed: User not authenticated');
+            return JSON.stringify({
+                success: false,
+                error: 'User not authenticated'
+            });
+        }
+
+        // Read player stats from storage
+        const objectIds = [{
+            collection: 'player_stats',
+            key: 'stats',
+            userId: userId
+        }];
+
+        const objects = nk.storageRead(objectIds);
+
+        let stats = {
+            score: 0,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            winStreak: 0
+        };
+
+        if (objects.length > 0 && objects[0].value) {
+            stats = JSON.parse(objects[0].value);
+        }
+
+        logger.info('Retrieved stats for user ' + userId + ': ' + JSON.stringify(stats));
+
+        return JSON.stringify({
+            success: true,
+            stats: stats
+        });
+
+    } catch (e) {
+        logger.error('Failed to get player stats: ' + e);
+        return JSON.stringify({
+            success: false,
+            error: String(e)
+        });
+    }
+}
+
+// RPC to update player stats after game
+function rpcUpdatePlayerStats(ctx, logger, nk, payload) {
+    try {
+        const userId = ctx.userId;
+
+        if (!userId) {
+            logger.error('Update player stats failed: User not authenticated');
+            return JSON.stringify({
+                success: false,
+                error: 'User not authenticated'
+            });
+        }
+
+        const params = JSON.parse(payload);
+        const isWin = params.isWin || false;
+        const isDraw = params.isDraw || false;
+
+        // Read current stats
+        const objectIds = [{
+            collection: 'player_stats',
+            key: 'stats',
+            userId: userId
+        }];
+
+        const objects = nk.storageRead(objectIds);
+
+        let stats = {
+            score: 0,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            winStreak: 0
+        };
+
+        if (objects.length > 0 && objects[0].value) {
+            stats = JSON.parse(objects[0].value);
+        }
+
+        // Update stats based on result
+        if (isWin) {
+            stats.score += 15;
+            stats.wins += 1;
+            stats.winStreak += 1;
+        } else if (isDraw) {
+            stats.score += 7;
+            stats.draws += 1;
+            stats.winStreak = 0;
+        } else {
+            // Loss
+            stats.score -= 15;
+            stats.losses += 1;
+            stats.winStreak = 0;
+        }
+
+        // Ensure score doesn't go below 0
+        if (stats.score < 0) {
+            stats.score = 0;
+        }
+
+        // Write updated stats
+        const write = [{
+            collection: 'player_stats',
+            key: 'stats',
+            userId: userId,
+            value: JSON.stringify(stats),
+            permissionRead: 1,
+            permissionWrite: 0
+        }];
+
+        nk.storageWrite(write);
+
+        logger.info('Updated stats for user ' + userId + ': ' + JSON.stringify(stats));
+
+        return JSON.stringify({
+            success: true,
+            stats: stats
+        });
+
+    } catch (e) {
+        logger.error('Failed to update player stats: ' + e);
+        return JSON.stringify({
+            success: false,
+            error: String(e)
+        });
+    }
+}
+
+
 
 // Match initialization
 function matchInit(ctx, logger, nk, params) {
@@ -430,6 +568,8 @@ function InitModule(ctx, logger, nk, initializer) {
     initializer.registerRpc('find_match', rpcFindMatch);
     initializer.registerRpc('get_user_account', rpcGetUserAccount);
     initializer.registerRpc('update_user_profile', rpcUpdateUserProfile);
+    initializer.registerRpc('get_player_stats', rpcGetPlayerStats);
+    initializer.registerRpc('update_player_stats', rpcUpdatePlayerStats);
 
     // Register match handler
     initializer.registerMatch('tictactoe', {

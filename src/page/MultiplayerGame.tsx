@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router';
 import { toast } from 'react-toastify';
 import PlayerCard from '../components/PlayerCard';
 import ModeSelectionModal from '../components/ModeSelectionModal';
+import MoveSummary from '../components/MoveSummary';
 import { nkClient } from '../services/nakama-client';
 import { NakamaMatchService } from '../services/nakama-match';
-import type { MatchPlayer } from '../types/types';
+import type { MatchPlayer, PlayerStats, Moves } from '../types/types';
 import { useAuth } from '../context/AuthContext';
 import { Session } from '@heroiclabs/nakama-js';
 
@@ -27,6 +28,11 @@ const MultiplayerGame: React.FC = () => {
   const [gameMode, setGameMode] = useState<GameMode>('classic');
   const [timeLimit, setTimeLimit] = useState<number | undefined>(undefined);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [playerStats, setPlayerStats] = useState<{ [userId: string]: PlayerStats }>({});
+  const [moves, setMoves] = useState<Moves[]>([]);
+  const [moveStartTime, setMoveStartTime] = useState<number>(Date.now());
+  const [playerAvatars, setPlayerAvatars] = useState<{ [userId: string]: string }>({});
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
 
   const matchServiceRef = useRef<NakamaMatchService | null>(null);
 
@@ -49,12 +55,63 @@ const MultiplayerGame: React.FC = () => {
   // Check if it's my turn
   const isMyTurn = currentTurn === myUserId && gameStatus === 'playing';
 
+  // Helper function to fetch player stats
+  const fetchPlayerStats = async (userId: string, session: any): Promise<PlayerStats> => {
+    try {
+      const response = await nkClient.rpc(session, 'get_player_stats', {});
+      const payload = typeof response.payload === 'string' ? JSON.parse(response.payload) : response.payload;
+
+      if (payload.success && payload.stats) {
+        const stats = payload.stats;
+        const totalGames = stats.wins + stats.losses + stats.draws;
+        const winPercentage = totalGames > 0 ? (stats.wins / totalGames) * 100 : 0;
+
+        return {
+          ...stats,
+          winPercentage
+        };
+      }
+    } catch (error) {
+      console.error('Failed to fetch player stats:', error);
+    }
+
+    return { score: 0, wins: 0, losses: 0, draws: 0, winStreak: 0, winPercentage: 0 };
+  };
+
+  // Helper function to update player stats
+  const updatePlayerStats = async (isWin: boolean, isDraw: boolean, session: any) => {
+    try {
+      const response = await nkClient.rpc(session, 'update_player_stats', {
+        isWin,
+        isDraw
+      });
+
+      const payload = typeof response.payload === 'string' ? JSON.parse(response.payload) : response.payload;
+
+      if (payload.success && payload.stats) {
+        const stats = payload.stats;
+        const totalGames = stats.wins + stats.losses + stats.draws;
+        const winPercentage = totalGames > 0 ? (stats.wins / totalGames) * 100 : 0;
+
+        return {
+          ...stats,
+          winPercentage
+        };
+      }
+    } catch (error) {
+      console.error('Failed to update player stats:', error);
+    }
+
+    return null;
+  };
+
   const handleModeSelect = async (mode: GameMode, time?: number) => {
     setShowModeModal(false);
     setGameMode(mode);
     setTimeLimit(time);
     await initializeGame(mode, time);
   };
+
 
   const initializeGame = async (mode: GameMode, time?: number) => {
     try {
@@ -95,38 +152,117 @@ const MultiplayerGame: React.FC = () => {
 
       // Set up callbacks for real-time updates
       matchService.setCallbacks({
-        onPlayerJoined: (player) => {
+        onPlayerJoined: async (player) => {
           console.log('Player joined:', player);
           setPlayers(prev => ({
             ...prev,
             [player.userId]: player
           }));
+
+          // Fetch stats for the joined player
+          const stats = await fetchPlayerStats(player.userId, session);
+          setPlayerStats(prev => ({
+            ...prev,
+            [player.userId]: stats
+          }));
+
+          // Fetch avatar from user account
+          try {
+            const response = await nkClient.rpc(session, 'get_user_account', {});
+            const payloadStr = typeof response.payload === 'string' ? response.payload : JSON.stringify(response.payload);
+            const payload = JSON.parse(payloadStr);
+
+            if (payload.success && payload.account.user.avatar_url) {
+              setPlayerAvatars(prev => ({
+                ...prev,
+                [player.userId]: payload.account.user.avatar_url
+              }));
+            }
+          } catch (error) {
+            console.error('Failed to fetch avatar:', error);
+          }
         },
-        onGameStart: (data) => {
+        onGameStart: async (data) => {
           console.log('Game started:', data);
           setPlayers(data.players);
           setCurrentTurn(data.currentTurn);
           setGameStatus('playing');
+          setMoveStartTime(Date.now());
+
+          // Fetch stats for all players
+          for (const userId of Object.keys(data.players)) {
+            const stats
+
+              = await fetchPlayerStats(userId, session);
+            setPlayerStats(prev => ({
+              ...prev,
+              [userId]: stats
+            }));
+          }
+
           toast.success('Game started! Good luck!');
         },
         onMoveMade: (data) => {
           console.log('Move made:', data);
           setBoard(data.board);
+
+          // Track move for Timed mode
+          if (mode === 'timed') {
+            const timeTaken = (Date.now() - moveStartTime) / 1000;
+            const moveNumber = moves.length + 1;
+            const playerSymbol = data.symbol as 'X' | 'O';
+
+            setMoves(prev => [...prev, {
+              moveNo: moveNumber,
+              player: playerSymbol,
+              row: Math.floor(data.position / 3),
+              col: data.position % 3,
+              timeTaken,
+              result: 'normal'
+            }]);
+            setMoveStartTime(Date.now());
+          }
+
           setCurrentTurn(data.currentTurn);
         },
-        onGameOver: (data) => {
+        onGameOver: async (data) => {
           console.log('Game over:', data);
           setBoard(data.board);
           setWinner(data.winner || null);
           setIsDraw(data.isDraw);
           setGameStatus('finished');
 
+          // Update stats for both players
           if (data.isDraw) {
-            toast.info("It's a draw!");
+            // Both players get +7 for draw
+            const updatedStats = await updatePlayerStats(false, true, session);
+            if (updatedStats) {
+              setPlayerStats(prev => ({
+                ...prev,
+                [myUserId]: updatedStats
+              }));
+            }
+            toast.info("It's a draw! +7 points");
           } else if (data.winner === myUserId) {
-            toast.success('You won! 🎉');
+            // Winner gets +15
+            const updatedStats = await updatePlayerStats(true, false, session);
+            if (updatedStats) {
+              setPlayerStats(prev => ({
+                ...prev,
+                [myUserId]: updatedStats
+              }));
+            }
+            toast.success('You won! +15 points 🎉');
           } else {
-            toast.info('You lost. Better luck next time!');
+            // Loser gets -15
+            const updatedStats = await updatePlayerStats(false, false, session);
+            if (updatedStats) {
+              setPlayerStats(prev => ({
+                ...prev,
+                [myUserId]: updatedStats
+              }));
+            }
+            toast.info('You lost. -15 points. Better luck next time!');
           }
         },
         onPlayerDisconnected: (userId) => {
@@ -184,6 +320,42 @@ const MultiplayerGame: React.FC = () => {
     }
     navigate('/');
   };
+
+  // Timer logic for Timed mode
+  const handleTimeout = async () => {
+    if (!matchServiceRef.current) return;
+
+    toast.warning('Time expired! Turn skipped');
+    // Make a move with position -1 to indicate timeout
+    try {
+      await matchServiceRef.current.makeMove(-1);
+    } catch (error) {
+      console.error('Failed to send timeout move:', error);
+    }
+  };
+
+  // Timer countdown effect
+  useEffect(() => {
+    if (gameMode !== 'timed' || !isMyTurn || !timeLimit || gameStatus !== 'playing') {
+      setTimeRemaining(null);
+      return;
+    }
+
+    setTimeRemaining(timeLimit);
+
+    const interval = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev === null || prev <= 1) {
+          // Time's up - trigger timeout
+          handleTimeout();
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isMyTurn, gameMode, timeLimit, gameStatus]);
 
   const handlePlayAgain = () => {
     // Reset state
@@ -305,15 +477,30 @@ const MultiplayerGame: React.FC = () => {
             {!winner && !isDraw && (isMyTurn ? "Your turn!" : "Opponent's turn...")}
           </p>
 
+          {/* Timer Display for Timed Mode */}
+          {gameMode === 'timed' && isMyTurn && timeRemaining !== null && gameStatus === 'playing' && (
+            <div className={`text-center mb-4 p-3 rounded-lg border-2 ${timeRemaining <= 5
+                ? 'border-red-500 bg-red-50 animate-pulse'
+                : 'border-blue-500 bg-blue-50'
+              }`}>
+              <p className={`text-lg font-bold ${timeRemaining <= 5 ? 'text-red-700' : 'text-blue-700'
+                }`}>
+                ⏱️ Time Remaining: {timeRemaining}s
+              </p>
+            </div>
+          )}
+
           <div className="flex flex-col md:flex-row gap-6 md:gap-10 justify-center items-center w-full max-w-4xl">
             {/* My Player Card */}
             <PlayerCard
-              avatarUrl=""
+              avatarUrl={playerAvatars[myUserId]}
               player={myPlayer}
               symbol={mySymbol || 'X'}
               isCurrentTurn={isMyTurn && !winner && !isDraw}
               isYou={true}
-              score={0}
+              score={playerStats[myUserId]?.score || 0}
+              winPercentage={playerStats[myUserId]?.winPercentage || 0}
+              winStreak={playerStats[myUserId]?.winStreak || 0}
             />
 
             {/* Game Board */}
@@ -355,14 +542,22 @@ const MultiplayerGame: React.FC = () => {
 
             {/* Opponent Card */}
             <PlayerCard
-              avatarUrl=""
+              avatarUrl={opponentId ? playerAvatars[opponentId] : undefined}
               player={opponent}
               symbol={opponent?.symbol || 'O'}
               isCurrentTurn={currentTurn === opponentId && !winner && !isDraw}
               isYou={false}
-              score={0}
+              score={opponentId ? (playerStats[opponentId]?.score || 0) : 0}
+              winPercentage={opponentId ? (playerStats[opponentId]?.winPercentage || 0) : 0}
+              winStreak={opponentId ? (playerStats[opponentId]?.winStreak || 0) : 0}
             />
           </div>
+
+          {/* MoveSummary for Timed mode */}
+          {gameMode === 'timed' && moves.length > 0 && (
+            <MoveSummary moves={moves} gameMode={gameMode} />
+          )}
+
 
           {/* Action Buttons */}
           <div className="flex gap-4 mt-4">

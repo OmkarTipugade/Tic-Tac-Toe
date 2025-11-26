@@ -73,14 +73,50 @@ const ProfilePage: React.FC = () => {
           username: user.username || "",
         });
 
-        setStats({
-          wins: 0,
-          losses: 0,
-          draws: 0,
-          score: 0,
-          winStreak: 0,
-          bestWinStreak: 0,
-        });
+        // Fetch player stats from backend
+        try {
+          const sessionStr = localStorage.getItem("user_session");
+          if (sessionStr) {
+            const sessionData = JSON.parse(sessionStr);
+            const session = Session.restore(sessionData.token, sessionData.refresh_token);
+
+            const response = await nkClient.rpc(session, 'get_player_stats', {});
+            const payloadStr = typeof response.payload === 'string' ? response.payload : JSON.stringify(response.payload);
+            const payload = JSON.parse(payloadStr);
+
+            if (payload.success && payload.stats) {
+              const fetchedStats = payload.stats;
+              const totalGames = fetchedStats.wins + fetchedStats.losses + fetchedStats.draws;
+              const winPercentage = totalGames > 0 ? (fetchedStats.wins / totalGames) * 100 : 0;
+
+              setStats({
+                ...fetchedStats,
+                bestWinStreak: fetchedStats.winStreak, // Using current as best for now
+              });
+            } else {
+              // Fallback to zeros if no stats
+              setStats({
+                wins: 0,
+                losses: 0,
+                draws: 0,
+                score: 0,
+                winStreak: 0,
+                bestWinStreak: 0,
+              });
+            }
+          }
+        } catch (statsError) {
+          console.error('Failed to fetch stats:', statsError);
+          // Fallback to zeros on error
+          setStats({
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            score: 0,
+            winStreak: 0,
+            bestWinStreak: 0,
+          });
+        }
 
         setGameHistory([]);
       } catch (err) {

@@ -120,6 +120,15 @@ interface PlayerDisconnectedMessage {
   userId: string;
 }
 
+interface PlayerStats {
+  score: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  winStreak: number;
+  winPercentage: number; // calculated from wins/(wins+losses+draws)
+}
+
 type BackendMessage =
   | PlayerJoinedMessage
   | GameStartMessage
@@ -143,5 +152,6 @@ export type {
   GameStartMessage,
   MoveMadeMessage,
   GameOverMessage,
-  PlayerDisconnectedMessage
+  PlayerDisconnectedMessage,
+  PlayerStats
 };
