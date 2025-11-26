@@ -150,7 +150,10 @@ const MultiplayerGame: React.FC = () => {
       const matchId = await matchService.findMatch(mode, time);
       console.log('Joined match:', matchId);
 
-      setGameStatus('waiting_for_opponent');
+      // Don't set to waiting_for_opponent here - if we joined an existing match with 2 players,
+      // the onGameStart callback will have already set status to 'playing'
+      // Only set to waiting if we're still finding_match (created a new match)
+      setGameStatus(prev => prev === 'finding_match' ? 'waiting_for_opponent' : prev);
 
     } catch (error) {
       console.error('Failed to initialize game:', error);
