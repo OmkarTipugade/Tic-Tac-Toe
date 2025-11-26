@@ -284,7 +284,14 @@ function rpcUpdatePlayerStats(ctx, logger, nk, payload) {
             });
         }
 
-        const params = JSON.parse(payload);
+        // Parse payload - it might already be an object or a string
+        let params;
+        if (typeof payload === 'string') {
+            params = JSON.parse(payload);
+        } else {
+            params = payload;
+        }
+
         const isWin = params.isWin || false;
         const isDraw = params.isDraw || false;
 
@@ -306,7 +313,8 @@ function rpcUpdatePlayerStats(ctx, logger, nk, payload) {
         };
 
         if (objects.length > 0 && objects[0].value) {
-            stats = JSON.parse(objects[0].value);
+            // Value is stored as object, not string
+            stats = objects[0].value;
         }
 
         // Update stats based on result

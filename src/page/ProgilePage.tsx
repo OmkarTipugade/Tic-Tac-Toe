@@ -78,8 +78,6 @@ const ProfilePage: React.FC = () => {
 
             if (payload.success && payload.stats) {
               const fetchedStats = payload.stats;
-              const totalGames = fetchedStats.wins + fetchedStats.losses + fetchedStats.draws;
-              const winPercentage = totalGames > 0 ? (fetchedStats.wins / totalGames) * 100 : 0;
 
               setStats({
                 ...fetchedStats,
