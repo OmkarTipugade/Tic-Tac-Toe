@@ -7,7 +7,7 @@ import { nkClient } from '../services/nakama-client';
 import { NakamaMatchService } from '../services/nakama-match';
 import type { MatchPlayer } from '../types/types';
 import { useAuth } from '../context/AuthContext';
-import type { Session } from '@heroiclabs/nakama-js';
+import { Session } from '@heroiclabs/nakama-js';
 
 type GameMode = 'classic' | 'timed';
 type GameStatus = 'idle' | 'connecting' | 'finding_match' | 'waiting_for_opponent' | 'playing' | 'finished';
@@ -69,7 +69,20 @@ const MultiplayerGame: React.FC = () => {
         return;
       }
 
-      const session = JSON.parse(sessionData) as Session;
+      const parsedSession = JSON.parse(sessionData);
+
+      if (!parsedSession.token) {
+        setErrorMessage('Invalid session. Please sign in again.');
+        toast.error('Session expired. Please sign in again.');
+        navigate('/sign-in');
+        return;
+      }
+
+      // Restore the Session object properly
+      const session = Session.restore(
+        parsedSession.token,
+        parsedSession.refresh_token
+      );
 
       if (!session.user_id) {
         throw new Error('Failed to get user ID from session');

@@ -71,7 +71,7 @@ const SignIn: React.FC = () => {
         setTimeout(() => navigate("/sign-up"), 3000);
         return;
       }
-      if (err.status === 400) {
+      if (err.status === 400 || err.status === 401) {
         toast.error("Invalid email or password!", toastOptions);
         return;
       }

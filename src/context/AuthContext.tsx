@@ -38,6 +38,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const logout = () => {
         localStorage.removeItem('logged_user');
+        localStorage.removeItem('nk_session');
+        localStorage.removeItem('user_session');
+        localStorage.removeItem('nk_device_id');
         setUser(null);
         window.location.href = '/';
     };
