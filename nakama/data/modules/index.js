@@ -459,7 +459,7 @@ function rpcUpdatePlayerStats(ctx, logger, nk, payload) {
 
         // Update leaderboard with new score
         try {
-            nk.leaderboardRecordWrite('global_leaderboard', userId, ctx.username || 'Player', stats.score, 0);
+            nk.leaderboardRecordWrite('global_leaderboard', userId, ctx.username || 'Player', stats.score, 0, null);
             logger.info('Leaderboard updated for ' + userId + ' with score ' + stats.score);
         } catch (e) {
             logger.warn('Failed to update leaderboard: ' + e);
@@ -570,6 +570,78 @@ function rpcGetLeaderboard(ctx, logger, nk, payload) {
     }
 }
 
+// RPC to migrate existing player stats to leaderboard (one-time migration)
+function rpcMigrateStatsToLeaderboard(ctx, logger, nk, payload) {
+    try {
+        logger.info('Starting migration of player stats to leaderboard...');
+
+        // List all player stats from storage
+        const objectList = nk.storageList('', 'player_stats', 1000, '');
+
+        if (!objectList || objectList.objects.length === 0) {
+            logger.info('No player stats found to migrate');
+            return JSON.stringify({
+                success: true,
+                migrated: 0,
+                message: 'No stats to migrate'
+            });
+        }
+
+        let migrated = 0;
+        let failed = 0;
+
+        // Write each player's stats to the leaderboard
+        for (let i = 0; i < objectList.objects.length; i++) {
+            const obj = objectList.objects[i];
+            try {
+                const stats = obj.value;
+                const userId = obj.userId;
+
+                // Skip if userId is empty or invalid
+                if (!userId || userId === '') {
+                    logger.warn('Skipping storage object with invalid userId');
+                    failed++;
+                    continue;
+                }
+
+                // Get username for leaderboard
+                let username = 'Player';
+                try {
+                    const account = nk.accountGetId(userId);
+                    username = account.user.username || account.user.displayName || 'Player';
+                } catch (e) {
+                    logger.warn('Could not fetch username for ' + userId);
+                }
+
+                // Write to leaderboard
+                nk.leaderboardRecordWrite('global_leaderboard', userId, username, stats.score || 0, 0, null);
+                migrated++;
+                logger.info('Migrated stats for ' + username + ' (score: ' + (stats.score || 0) + ')');
+            } catch (e) {
+                logger.error('Failed to migrate stats for user: ' + e);
+                failed++;
+            }
+        }
+
+        logger.info('Migration complete. Migrated: ' + migrated + ', Failed: ' + failed);
+
+        return JSON.stringify({
+            success: true,
+            migrated: migrated,
+            failed: failed,
+            message: 'Migration completed successfully'
+        });
+
+    } catch (e) {
+        logger.error('Failed to migrate stats to leaderboard: ' + e);
+        return JSON.stringify({
+            success: false,
+            error: String(e)
+        });
+    }
+}
+
+
 // Helper function to update player stats for forfeit
 function updatePlayerStatsForForfeit(nk, logger, userId, isWinner) {
     try {
@@ -635,7 +707,7 @@ function updatePlayerStatsForForfeit(nk, logger, userId, isWinner) {
             } catch (e) {
                 // Use default
             }
-            nk.leaderboardRecordWrite('global_leaderboard', userId, username, stats.score, 0);
+            nk.leaderboardRecordWrite('global_leaderboard', userId, username, stats.score, 0, null);
             logger.info('Leaderboard updated after forfeit for ' + userId);
         } catch (e) {
             logger.warn('Failed to update leaderboard after forfeit: ' + e);
@@ -1057,6 +1129,7 @@ function InitModule(ctx, logger, nk, initializer) {
     initializer.registerRpc('get_player_stats_by_id', rpcGetPlayerStatsById);
     initializer.registerRpc('update_player_stats', rpcUpdatePlayerStats);
     initializer.registerRpc('get_leaderboard', rpcGetLeaderboard);
+    initializer.registerRpc('migrate_stats_to_leaderboard', rpcMigrateStatsToLeaderboard);
 
     // Register match handler
     initializer.registerMatch('tictactoe', {

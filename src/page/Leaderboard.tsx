@@ -17,6 +17,8 @@ const Leaderboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [myUserId, setMyUserId] = useState<string | null>(null);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationMessage, setMigrationMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadLeaderboard();
@@ -91,6 +93,45 @@ const Leaderboard: React.FC = () => {
     }
   };
 
+  const handleMigrateStats = async () => {
+    try {
+      setMigrating(true);
+      setMigrationMessage(null);
+
+      // Get session
+      const sessionData = localStorage.getItem('user_session');
+      if (!sessionData) {
+        setMigrationMessage('Please log in first');
+        return;
+      }
+
+      const parsedSession = JSON.parse(sessionData);
+      const sessionObj = Session.restore(
+        parsedSession.token,
+        parsedSession.refresh_token
+      );
+
+      // Call migration RPC
+      const response = await nkClient.rpc(sessionObj, 'migrate_stats_to_leaderboard', {});
+      const payload = typeof response.payload === 'string' ? JSON.parse(response.payload) : response.payload;
+
+      console.log('Migration result:', payload);
+
+      if (payload.success) {
+        setMigrationMessage(`✅ Migration complete! ${payload.migrated} players synced to leaderboard`);
+        // Reload leaderboard after migration
+        await loadLeaderboard();
+      } else {
+        setMigrationMessage(`❌ Migration failed: ${payload.error}`);
+      }
+    } catch (err: any) {
+      console.error('Migration error:', err);
+      setMigrationMessage('Migration failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setMigrating(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-white">
@@ -112,6 +153,12 @@ const Leaderboard: React.FC = () => {
         {error && (
           <div className="mb-6 p-4 bg-red-100 border-2 border-red-500 text-red-700 rounded-lg text-center font-semibold">
             {error}
+          </div>
+        )}
+
+        {migrationMessage && (
+          <div className="mb-6 p-4 bg-blue-100 border-2 border-blue-500 text-blue-700 rounded-lg text-center font-semibold">
+            {migrationMessage}
           </div>
         )}
 
@@ -215,6 +262,15 @@ const Leaderboard: React.FC = () => {
           >
             🔄 Refresh
           </button>
+          {entries.length === 0 && (
+            <button
+              onClick={handleMigrateStats}
+              disabled={migrating}
+              className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {migrating ? '⏳ Syncing...' : '🔄 Sync Stats to Leaderboard'}
+            </button>
+          )}
           <button
             onClick={() => navigate('/')}
             className="bg-white border-2 border-black text-black px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)]"
