@@ -524,11 +524,13 @@ function rpcGetLeaderboard(ctx, logger, nk, payload) {
                 const stats = obj.value;
                 const userId = obj.userId;
 
-                // Get user account for username
+                // Get username and location for leaderboard
                 let username = 'Player';
+                let location = '';
                 try {
                     const account = nk.accountGetId(userId);
                     username = account.user.username || account.user.displayName || 'Player';
+                    location = account.user.location || '';
                 } catch (e) {
                     logger.warn('Could not fetch username for ' + userId);
                 }
@@ -540,6 +542,7 @@ function rpcGetLeaderboard(ctx, logger, nk, payload) {
                 players.push({
                     userId: userId,
                     username: username,
+                    location: location,
                     score: stats.score || 0,
                     wins: stats.wins || 0,
                     losses: stats.losses || 0,

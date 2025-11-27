@@ -7,6 +7,7 @@ interface LeaderboardEntry {
   rank: number;
   ownerId: string;
   username: string;
+  location: string;
   score: number;
   wins: number;
   losses: number;
@@ -119,6 +120,7 @@ const Leaderboard: React.FC = () => {
           rank: index + 1,
           ownerId: player.userId || '',
           username: player.username || 'Player',
+          location: player.location || '',
           score: player.score || 0,
           wins: player.wins || 0,
           losses: player.losses || 0,
@@ -175,6 +177,9 @@ const Leaderboard: React.FC = () => {
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
                     Player
+                  </th>
+                  <th className="px-4 py-4 text-left text-xs font-bold text-black uppercase tracking-wider">
+                    Location
                   </th>
                   <th className="px-4 py-4 text-center text-xs font-bold text-black uppercase tracking-wider">
                     Score
@@ -238,6 +243,13 @@ const Leaderboard: React.FC = () => {
                               </span>
                             )}
                           </div>
+                        </td>
+
+                        {/* Location */}
+                        <td className="px-4 py-4">
+                          <span className="text-sm text-gray-700">
+                            {entry.location || '-'}
+                          </span>
                         </td>
 
                         {/* Score */}
