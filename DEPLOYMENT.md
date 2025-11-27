@@ -145,6 +145,19 @@ Nakama Console:
 http://<EXTERNAL_IP>:7351
 ```
 
-
 ---
+### Screenshots
+1. Installed Nakama on VM Instance
+<img width="1280" height="832" alt="Screenshot 2025-11-27 at 11 57 35 PM" src="https://github.com/user-attachments/assets/7c1e2d50-5e46-424b-a84e-fc7bbf03147e" />
+
+2. VM Instance external host: 
+<img width="1280" height="832" alt="Screenshot 2025-11-27 at 11 58 55 PM" src="https://github.com/user-attachments/assets/2f43a3ab-63ec-49e7-8881-2a847355ade3" />
+
+3. Created Firewall rules
+<img width="1280" height="832" alt="Screenshot 2025-11-28 at 1 04 26 AM" src="https://github.com/user-attachments/assets/33649c3b-047d-402b-9c92-ec60b9745b22" />
+
+4. Verify on browser
+
+<img width="1280" height="832" alt="Screenshot 2025-11-28 at 12 45 46 AM" src="https://github.com/user-attachments/assets/ef0b0ac8-aabb-461c-b4b3-a1ad4c516917" />
+
 
