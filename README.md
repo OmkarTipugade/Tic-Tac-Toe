@@ -10,7 +10,7 @@ A modern, real-time multiplayer Tic-Tac-Toe game built with React, TypeScript, a
 - **Offline Game**: Play against your friend
 - **Multiplayer**: Real-time online matches with other players
   - **Classic Mode**: Take your time, no rush
-  - **⏱ Timed Mode**: Make moves within time limits (customizable: 10s, 15s, 30s)
+  - **⏱ Timed Mode**: Make moves within time limits (customizable: 5s, 10s, 15s, 20s, 30s)
 
 ### User Features
 - **Authentication**: Email/password sign-up and sign-in
@@ -34,7 +34,6 @@ A modern, real-time multiplayer Tic-Tac-Toe game built with React, TypeScript, a
 - **Opponent Tracking**: See opponent's avatar, stats, and location
 - **Turn Indicators**: Clear visual cues for whose turn it is
 - **Timeout Handling**: Automatic forfeit on time expiration (timed mode)
-- **Game Notifications**: Toast messages for game events
 
 ### Scoring System
 - **Win**: +15 points, +1 win, streak continues
@@ -66,7 +65,7 @@ graph TB
         SignIn[Sign In]
         SignUp[Sign Up]
         Profile[Profile Page]
-        PlayGame[Single Player]
+        PlayGame[Offline Play]
         Multiplayer[Multiplayer Game]
         Leaderboard[Leaderboard]
         
@@ -106,7 +105,7 @@ graph TB
     MatchService -.WebSocket.-> MatchHandler
     
 ```
-
+```mermaid
 graph LR
     subgraph "Core Services"
         NC[nakama-client.ts]
@@ -187,12 +186,10 @@ sequenceDiagram
 
 ### Frontend
 - **React 19.2.0**: UI framework
-- **TypeScript 5.9.3**: Type-safe JavaScript
 - **TailwindCSS 4.1.17**: Utility-first CSS framework
 - **React Router 7.9.6**: Client-side routing
 - **React Hook Form 7.66.1**: Form validation
 - **React Toastify 11.0.5**: Toast notifications
-- **React Icons 5.5.0**: Icon library
 
 ### Backend
 - **Nakama 3.24.1**: Open-source game server
@@ -200,10 +197,7 @@ sequenceDiagram
 - **PostgreSQL**: Data persistence (via Nakama)
 - **Docker**: Containerization
 
-### Development Tools
-- **ESLint**: Code linting
-- **TypeScript ESLint**: TypeScript-specific linting
-- **Vite Plugin React**: Fast refresh support
+
 
 ## Project Structure
 
@@ -419,9 +413,6 @@ This project is licensed under the MIT License.
 ## Acknowledgments
 
 - [Heroic Labs](https://heroiclabs.com/) for Nakama game server
-- [React Team](https://react.dev/) for the amazing framework
-- [Tailwind Labs](https://tailwindcss.com/) for TailwindCSS
-- [Vite Team](https://vitejs.dev/) for the blazing-fast build tool
 
 ## Contact
 
