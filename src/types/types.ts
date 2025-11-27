@@ -106,6 +106,7 @@ interface MoveMadeMessage {
   symbol: string;
   board: string[];
   currentTurn: string;
+  timeTaken?: number;  // Server-calculated time for this move
 }
 
 interface GameOverMessage {
@@ -113,6 +114,7 @@ interface GameOverMessage {
   winner?: string;
   board: string[];
   isDraw: boolean;
+  reason?: 'normal' | 'forfeit' | 'timeout';
 }
 
 interface PlayerDisconnectedMessage {

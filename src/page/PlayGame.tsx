@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import PlayerCard from "../components/PlayerCard";
-import MoveSummary from "../components/MoveSummary";
 import ModeSelectionModal from "../components/ModeSelectionModal";
-import type { Moves, PlayerSymbol } from "../types/types";
+import type { PlayerSymbol } from "../types/types";
 
 type GameMode = "classic" | "timed";
 
@@ -23,7 +22,6 @@ const PlayGame: React.FC = () => {
 
   const [board, setBoard] = useState<Board>(() => createEmptyBoard());
   const [currentPlayer, setCurrentPlayer] = useState<PlayerSymbol>("X");
-  const [moves, setMoves] = useState<Moves[]>([]);
   const [winner, setWinner] = useState<PlayerSymbol | "draw" | null>(null);
   const [winningCells, setWinningCells] = useState<
     { row: number; col: number }[]
@@ -109,7 +107,6 @@ const PlayGame: React.FC = () => {
   const resetForNewGame = (mode: GameMode, time?: number) => {
     setBoard(createEmptyBoard());
     setCurrentPlayer("X");
-    setMoves([]);
     setWinner(null);
     setWinningCells([]);
     setGameMode(mode);
@@ -149,22 +146,9 @@ const PlayGame: React.FC = () => {
   const handleTimeout = () => {
     if (winner || gameMode !== "timed" || !moveTime) return;
 
-    const now = Date.now();
-    const timeTaken = currentMoveStartTime
-      ? (now - currentMoveStartTime) / 1000
-      : moveTime;
 
-    setMoves((prev) => [
-      ...prev,
-      {
-        moveNo: prev.length + 1,
-        player: currentPlayer,
-        row: null,
-        col: null,
-        timeTaken: parseFloat(timeTaken.toFixed(2)),
-        result: "timeout",
-      },
-    ]);
+
+
 
     const nextPlayer: PlayerSymbol = currentPlayer === "X" ? "O" : "X";
     setCurrentPlayer(nextPlayer);
@@ -183,17 +167,7 @@ const PlayGame: React.FC = () => {
     const timeTaken =
       currentMoveStartTime !== null ? (now - currentMoveStartTime) / 1000 : 0;
 
-    const newMove: Moves = {
-      moveNo: moves.length + 1,
-      player: currentPlayer,
-      row: rowIndex,
-      col: colIndex,
-      timeTaken: parseFloat(timeTaken.toFixed(2)),
-      result: "normal",
-    };
-
     setBoard(newBoard);
-    setMoves((prev) => [...prev, newMove]);
 
     const result = checkWinner(newBoard);
 
@@ -392,7 +366,6 @@ const PlayGame: React.FC = () => {
         />
       </div>
 
-      {gameMode === "timed" && <MoveSummary moves={moves} gameMode={gameMode} />}
 
       {winner && (
         <button

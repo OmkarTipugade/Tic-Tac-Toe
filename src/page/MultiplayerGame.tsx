@@ -1,12 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { toast } from 'react-toastify';
 import PlayerCard from '../components/PlayerCard';
 import ModeSelectionModal from '../components/ModeSelectionModal';
-import MoveSummary from '../components/MoveSummary';
 import { nkClient } from '../services/nakama-client';
 import { NakamaMatchService } from '../services/nakama-match';
-import type { MatchPlayer, PlayerStats, Moves } from '../types/types';
+import type { MatchPlayer, PlayerStats } from '../types/types';
 import { useAuth } from '../context/AuthContext';
 import { Session } from '@heroiclabs/nakama-js';
 
@@ -15,6 +14,7 @@ type GameStatus = 'idle' | 'connecting' | 'finding_match' | 'waiting_for_opponen
 
 const MultiplayerGame: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated } = useAuth();
 
   const [showModeModal, setShowModeModal] = useState(true);
@@ -29,10 +29,11 @@ const MultiplayerGame: React.FC = () => {
   const [timeLimit, setTimeLimit] = useState<number | undefined>(undefined);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [playerStats, setPlayerStats] = useState<{ [userId: string]: PlayerStats }>({});
-  const [moves, setMoves] = useState<Moves[]>([]);
-  const [moveStartTime, setMoveStartTime] = useState<number>(Date.now());
   const [playerAvatars, setPlayerAvatars] = useState<{ [userId: string]: string }>({});
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [showLeaveConfirmation, setShowLeaveConfirmation] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [lastMoveData, setLastMoveData] = useState<any>(null);
 
   const matchServiceRef = useRef<NakamaMatchService | null>(null);
 
@@ -124,6 +125,7 @@ const MultiplayerGame: React.FC = () => {
 
   const initializeGame = async (mode: GameMode, time?: number) => {
     try {
+      setIsCancelling(false); // Reset cancelling flag
       setGameStatus('connecting');
       setErrorMessage('');
 
@@ -150,6 +152,30 @@ const MultiplayerGame: React.FC = () => {
         parsedSession.refresh_token
       );
 
+      // Check if session is expired
+      if (session.isexpired(Date.now() / 1000)) {
+        console.log('Session expired, refreshing...');
+        try {
+          // Try to refresh the session
+          const newSession = await nkClient.sessionRefresh(session);
+          // Update localStorage with new session
+          localStorage.setItem('user_session', JSON.stringify({
+            token: newSession.token,
+            refresh_token: newSession.refresh_token,
+            user_id: newSession.user_id,
+            username: newSession.username
+          }));
+          // Use the new session
+          session.token = newSession.token;
+        } catch (refreshError) {
+          console.error('Failed to refresh session:', refreshError);
+          setErrorMessage('Session expired. Please sign in again.');
+          toast.error('Session expired. Please sign in again.');
+          navigate('/sign-in');
+          return;
+        }
+      }
+
       if (!session.user_id) {
         throw new Error('Failed to get user ID from session');
       }
@@ -163,6 +189,12 @@ const MultiplayerGame: React.FC = () => {
       matchService.setCallbacks({
         onPlayerJoined: async (player) => {
           console.log('=== PLAYER JOINED ===', player);
+          // Only process if we're still in a valid game state
+          if (gameStatus === 'idle') {
+            console.log('Ignoring player joined - game already canceled');
+            return;
+          }
+
           setPlayers(prev => ({
             ...prev,
             [player.userId]: player
@@ -202,13 +234,19 @@ const MultiplayerGame: React.FC = () => {
         },
         onGameStart: async (data) => {
           console.log('=== GAME START ===', data);
+          // Only process if we're still in a valid game state
+          setGameStatus(prev => {
+            if (prev === 'idle') {
+              console.log('Ignoring game start - game already canceled');
+              return prev;
+            }
+            return 'playing';
+          });
+
           setPlayers(data.players);
           setCurrentTurn(data.currentTurn);
-          setGameStatus('playing');
-          setMoveStartTime(Date.now());
 
-          // Reset moves for new game
-          setMoves([]);
+
 
           // Fetch stats AND avatars for ALL players
           for (const userId of Object.keys(data.players)) {
@@ -250,27 +288,20 @@ const MultiplayerGame: React.FC = () => {
         },
         onMoveMade: (data) => {
           console.log('Move made:', data);
+          setLastMoveData(data); // Store for potential use in onGameOver
+
+          // Check if this is a timeout (position === -1)
+          if (data.position === -1) {
+            const isMyTimeout = currentTurn === myUserId;
+            if (isMyTimeout) {
+              toast.warning('Time expired! Your turn was skipped');
+            } else {
+              toast.info('Opponent timed out. Your turn!');
+            }
+          }
+
           setBoard(data.board);
 
-          // Track move for Timed mode
-          if (mode === 'timed') {
-            const timeTaken = (Date.now() - moveStartTime) / 1000;
-            // Calculate move number based on how many cells are filled (unique across both players)
-            const moveNumber = data.board.filter(cell => cell !== '').length;
-            const playerSymbol = data.symbol as 'X' | 'O';
-
-            setMoves(prev => [...prev, {
-              moveNo: moveNumber,
-              player: playerSymbol,
-              row: Math.floor(data.position / 3),
-              col: data.position % 3,
-              timeTaken,
-              result: 'normal'
-            }]);
-
-            // Reset timer for next move
-            setMoveStartTime(Date.now());
-          }
 
           setCurrentTurn(data.currentTurn);
         },
@@ -278,17 +309,56 @@ const MultiplayerGame: React.FC = () => {
           console.log('=== GAME OVER ===', {
             winner: data.winner,
             isDraw: data.isDraw,
+            reason: data.reason,
             myUserId,
             sessionExists: !!session
           });
+
 
           setBoard(data.board);
           setWinner(data.winner || null);
           setIsDraw(data.isDraw);
           setGameStatus('finished');
 
-          // Update stats for both players
-          if (data.isDraw) {
+          // Check if this was a forfeit
+          const isForfeit = data.reason === 'forfeit';
+
+          // Backend already updated stats for forfeit, so we just need to refetch
+          // For normal games, we need to update stats
+          if (isForfeit) {
+            // Stats already updated on backend, just refetch for both players
+            console.log('📊 Forfeit detected - refetching stats for both players');
+
+            // Add delay to ensure backend has completed stats updates
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Refetch my stats
+            const myStats = await fetchPlayerStats(myUserId, session);
+            if (myStats) {
+              setPlayerStats(prev => ({
+                ...prev,
+                [myUserId]: myStats
+              }));
+            }
+
+            // Refetch opponent's stats
+            if (opponentId) {
+              const opponentStats = await fetchPlayerStats(opponentId, session);
+              if (opponentStats) {
+                setPlayerStats(prev => ({
+                  ...prev,
+                  [opponentId]: opponentStats
+                }));
+              }
+            }
+
+            // Show forfeit-specific notifications
+            if (data.winner === myUserId) {
+              toast.info('Opponent forfeited. You win! +15 points 🎉');
+            } else {
+              toast.warning('You forfeited. -15 points');
+            }
+          } else if (data.isDraw) {
             // Both players get +7 for draw
             console.log('📊 Updating stats for DRAW');
             const updatedStats = await updatePlayerStats(false, true, session);
@@ -389,6 +459,12 @@ const MultiplayerGame: React.FC = () => {
       const matchId = await matchService.findMatch(mode, time);
       console.log('Joined match:', matchId);
 
+      // Check if user cancelled while we were finding the match
+      if (isCancelling) {
+        console.log('Match finding was cancelled, cleaning up');
+        return;
+      }
+
       // Don't set to waiting_for_opponent here - if we joined an existing match with 2 players,
       // the onGameStart callback will have already set status to 'playing'
       // Only set to waiting if we're still finding_match (created a new match)
@@ -396,9 +472,12 @@ const MultiplayerGame: React.FC = () => {
 
     } catch (error) {
       console.error('Failed to initialize game:', error);
-      setErrorMessage('Failed to connect to game server. Please try again.');
+      // Don't show error if we're cancelling
+      if (!isCancelling) {
+        setErrorMessage('Failed to connect to game server. Please try again.');
+        toast.error('Connection failed');
+      }
       setGameStatus('idle');
-      toast.error('Connection failed');
     }
   };
 
@@ -416,12 +495,70 @@ const MultiplayerGame: React.FC = () => {
     }
   };
 
-  const handleLeaveMatch = async () => {
-    if (matchServiceRef.current) {
-      await matchServiceRef.current.leaveMatch();
-      matchServiceRef.current.disconnect();
+  const handleLeaveMatch = async (confirmed: boolean = false) => {
+    // If game is in progress and not confirmed, show confirmation dialog
+    if (gameStatus === 'playing' && !winner && !isDraw && !confirmed) {
+      setShowLeaveConfirmation(true);
+      return;
     }
-    navigate('/');
+
+    // Close confirmation dialog if open
+    setShowLeaveConfirmation(false);
+
+    // Set cancelling flag to stop any ongoing match finding
+    setIsCancelling(true);
+
+    // Immediately set to idle to prevent any race conditions with incoming messages
+    const wasInProgress = gameStatus === 'playing' && !winner && !isDraw;
+    setGameStatus('idle');
+
+    try {
+      // If leaving mid-game, send forfeit message
+      if (wasInProgress && matchServiceRef.current) {
+        try {
+          // Send forfeit message to backend
+          await matchServiceRef.current.sendForfeit();
+        } catch (error) {
+          console.error('Failed to send forfeit:', error);
+        }
+      }
+
+      // Leave match and cleanup
+      if (matchServiceRef.current) {
+        try {
+          // Leave the match if we're in one
+          await matchServiceRef.current.leaveMatch();
+        } catch (error) {
+          console.error('Failed to leave match:', error);
+        }
+
+        try {
+          // Disconnect socket
+          matchServiceRef.current.disconnect();
+        } catch (error) {
+          console.error('Failed to disconnect:', error);
+        }
+
+        matchServiceRef.current = null;
+      }
+
+      // Reset all state to initial values
+      setBoard(Array(9).fill(''));
+      setPlayers({});
+      setCurrentTurn('');
+      setWinner(null);
+      setIsDraw(false);
+      setErrorMessage('');
+      setPlayerStats({});
+      setPlayerAvatars({});
+      setShowLeaveConfirmation(false);
+
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+    } finally {
+      // Always navigate back, even if cleanup failed
+      navigate('/');
+    }
   };
 
   // Timer logic for Timed mode
@@ -487,6 +624,43 @@ const MultiplayerGame: React.FC = () => {
     };
   }, []);
 
+  // Detect browser navigation/close during active game
+  useEffect(() => {
+    const handleBeforeUnload = async (e: BeforeUnloadEvent) => {
+      // Only intervene if game is in progress
+      if (gameStatus === 'playing' && !winner && !isDraw && matchServiceRef.current) {
+        // Send forfeit message
+        try {
+          await matchServiceRef.current.sendForfeit();
+          console.log('Forfeit sent due to navigation/close');
+        } catch (error) {
+          console.error('Failed to send forfeit on navigation:', error);
+        }
+
+        // Standard beforeunload message (browsers may not show it)
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [gameStatus, winner, isDraw]);
+
+  // Detect SPA route changes (navigating away from multiplayer page)
+  useEffect(() => {
+    // This cleanup function runs when component unmounts (route change)
+    return () => {
+      if (gameStatus === 'playing' && !winner && !isDraw && matchServiceRef.current) {
+        console.log('Route change detected during active game - sending forfeit');
+        // Send forfeit synchronously (best-effort)
+        matchServiceRef.current.sendForfeit().catch(err => {
+          console.error('Failed to send forfeit on route change:', err);
+        });
+      }
+    };
+  }, [location.pathname, gameStatus, winner, isDraw]);
+
   if (gameStatus === 'connecting') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">
@@ -505,7 +679,7 @@ const MultiplayerGame: React.FC = () => {
           <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-black mx-auto"></div>
           <p className="mt-4 text-lg font-semibold">Finding match...</p>
           <button
-            onClick={handleLeaveMatch}
+            onClick={() => handleLeaveMatch()}
             className="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
           >
             Cancel
@@ -524,10 +698,10 @@ const MultiplayerGame: React.FC = () => {
           </div>
           <p className="text-gray-600 mb-4">You'll be matched with another player soon</p>
           <button
-            onClick={handleLeaveMatch}
+            onClick={() => handleLeaveMatch()}
             className="mt-4 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
           >
-            Leave
+            Cancel
           </button>
         </div>
       </div>
@@ -553,6 +727,33 @@ const MultiplayerGame: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col items-center p-4 gap-6 bg-white">
       {showModeModal && <ModeSelectionModal onSelect={handleModeSelect} />}
+
+      {/* Leave Confirmation Dialog */}
+      {showLeaveConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md mx-4 shadow-xl border-2 border-black">
+            <h2 className="text-xl font-bold mb-4">Leave Match?</h2>
+            <p className="text-gray-700 mb-6">
+              The game is in progress. If you leave now, you will forfeit and your opponent will win.
+              You will lose 15 points.
+            </p>
+            <div className="flex gap-4 justify-end">
+              <button
+                onClick={() => setShowLeaveConfirmation(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300"
+              >
+                Stay in Match
+              </button>
+              <button
+                onClick={() => handleLeaveMatch(true)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700"
+              >
+                Forfeit & Leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <h1 className="text-center text-2xl sm:text-3xl font-bold mt-4 text-black">
         Multiplayer Tic-Tac-Toe
@@ -622,9 +823,9 @@ const MultiplayerGame: React.FC = () => {
                       disabled={!isMyTurn || cell !== '' || winner !== null || isDraw}
                       onClick={() => handleCellClick(index)}
                       className={`
-                        aspect-square 
+                        aspect-square
                         w-20 sm:w-24 md:w-28 
-                        flex justify-center items-center 
+                        flex justify-center items-center
                         text-2xl sm:text-3xl font-bold
                         border-black 
                         ${!isTop ? 'border-t-2' : ''}
@@ -656,11 +857,6 @@ const MultiplayerGame: React.FC = () => {
             />
           </div>
 
-          {/* MoveSummary for Timed mode */}
-          {gameMode === 'timed' && moves.length > 0 && (
-            <MoveSummary moves={moves} gameMode={gameMode} />
-          )}
-
 
           {/* Action Buttons */}
           <div className="flex gap-4 mt-4">
@@ -673,10 +869,10 @@ const MultiplayerGame: React.FC = () => {
               </button>
             )}
             <button
-              onClick={handleLeaveMatch}
+              onClick={() => handleLeaveMatch()}
               className="px-6 py-2 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700"
             >
-              Leave Match
+              {(winner || isDraw) ? 'Leave Match' : 'Forfeit & Leave'}
             </button>
           </div>
         </>

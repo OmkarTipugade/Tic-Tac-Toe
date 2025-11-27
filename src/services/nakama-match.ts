@@ -22,11 +22,13 @@ type MatchCallbacks = {
     symbol: string;
     board: string[];
     currentTurn: string;
+    timeTaken?: number;  // Server-provided time for this move
   }) => void;
   onGameOver?: (data: {
     winner?: string;
     isDraw: boolean;
     board: string[];
+    reason?: 'normal' | 'forfeit' | 'timeout';
   }) => void;
   onPlayerDisconnected?: (userId: string) => void;
   onError?: (error: string) => void;
@@ -142,15 +144,47 @@ export class NakamaMatchService {
   }
 
   async leaveMatch(): Promise<void> {
-    if (!this.socket || !this.currentMatch) return;
+    if (!this.socket || !this.currentMatch) {
+      console.log('No active match to leave');
+      return;
+    }
 
-    await this.socket.leaveMatch(this.currentMatch.match_id);
-    this.currentMatch = null;
+    try {
+      await this.socket.leaveMatch(this.currentMatch.match_id);
+      console.log('Successfully left match:', this.currentMatch.match_id);
+    } catch (error) {
+      console.error('Error leaving match:', error);
+      // Don't throw - just log the error
+    } finally {
+      this.currentMatch = null;
+    }
+  }
+
+  async sendForfeit(): Promise<void> {
+    if (!this.socket || !this.currentMatch) {
+      throw new Error("Not in a match");
+    }
+
+    // Send forfeit message to backend
+    const forfeitData = JSON.stringify({
+      type: 'forfeit'
+    });
+
+    await this.socket.sendMatchState(
+      this.currentMatch.match_id,
+      0, // op_code
+      forfeitData
+    );
   }
 
   disconnect(): void {
     if (this.socket) {
-      this.socket.disconnect(true);
+      try {
+        this.socket.disconnect(true);
+        console.log('Socket disconnected successfully');
+      } catch (error) {
+        console.error('Error disconnecting socket:', error);
+      }
       this.socket = null;
     }
     this.currentMatch = null;
