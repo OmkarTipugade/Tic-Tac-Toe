@@ -360,7 +360,7 @@ const MultiplayerGame: React.FC = () => {
       console.error('Failed to initialize game:', error);
       // Don't show error if we're cancelling
       if (!isCancelling) {
-        setErrorMessage('Failed to connect to game server. Please try again.');
+        setErrorMessage('Failed to connect to game server. Please Relogin and try again.');
         toast.error('Connection failed');
       }
       setGameStatus('idle');

@@ -476,14 +476,6 @@ function rpcUpdatePlayerStats(ctx, logger, nk, payload) {
 
         logger.info('Player stats updated for ' + userId + ': ' + JSON.stringify(stats));
 
-        // Update leaderboard with new score
-        try {
-            nk.leaderboardRecordWrite('global_leaderboard', userId, ctx.username || 'Player', stats.score, 0, null);
-            logger.info('Leaderboard updated for ' + userId + ' with score ' + stats.score);
-        } catch (e) {
-            logger.warn('Failed to update leaderboard: ' + e);
-        }
-
         return JSON.stringify({
             success: true,
             stats: stats
@@ -513,8 +505,8 @@ function rpcGetLeaderboard(ctx, logger, nk, payload) {
 
         logger.info('Fetching leaderboard, limit: ' + limit);
 
-        // List all player stats from storage
-        const objectList = nk.storageList('', 'player_stats', limit + 100, ''); // Get extra to filter
+        // List all player stats from storage (null = all users' stats)
+        const objectList = nk.storageList(null, 'player_stats', limit + 100, ''); // Get extra to filter
 
         if (!objectList || objectList.objects.length === 0) {
             logger.info('No player stats found');
@@ -566,7 +558,7 @@ function rpcGetLeaderboard(ctx, logger, nk, payload) {
             if (b.score !== a.score) {
                 return b.score - a.score;
             }
-            // Tie-breaker: higher win rate
+            // Tiebreaker: higher win rate
             return b.winRate - a.winRate;
         });
 
@@ -632,8 +624,6 @@ function rpcMigrateStatsToLeaderboard(ctx, logger, nk, payload) {
                     logger.warn('Could not fetch username for ' + userId);
                 }
 
-                // Write to leaderboard
-                nk.leaderboardRecordWrite('global_leaderboard', userId, username, stats.score || 0, 0, null);
                 migrated++;
                 logger.info('Migrated stats for ' + username + ' (score: ' + (stats.score || 0) + ')');
             } catch (e) {
@@ -739,10 +729,9 @@ function updatePlayerStatsForForfeit(nk, logger, userId, isWinner) {
             } catch (e) {
                 // Use default
             }
-            nk.leaderboardRecordWrite('global_leaderboard', userId, username, stats.score, 0, null);
-            logger.info('Leaderboard updated after forfeit for ' + userId);
+            logger.info('Stats updated after forfeit for ' + userId);
         } catch (e) {
-            logger.warn('Failed to update leaderboard after forfeit: ' + e);
+            logger.warn('Failed to update stats after forfeit: ' + e);
         }
 
     } catch (error) {
@@ -833,10 +822,9 @@ function updatePlayerStatsForResult(nk, logger, userId, result) {
             } catch (e) {
                 // Use default
             }
-            nk.leaderboardRecordWrite('global_leaderboard', userId, username, stats.score, 0, null);
-            logger.info('Leaderboard updated for ' + userId);
+            logger.info('Stats updated for ' + userId);
         } catch (e) {
-            logger.warn('Failed to update leaderboard: ' + e);
+            logger.warn('Failed to update stats: ' + e);
         }
 
     } catch (error) {

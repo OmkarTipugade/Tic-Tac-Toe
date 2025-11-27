@@ -8,7 +8,9 @@ interface LeaderboardEntry {
   ownerId: string;
   username: string;
   score: number;
-  numScore: number;
+  wins: number;
+  losses: number;
+  draws: number;
 }
 
 const Leaderboard: React.FC = () => {
@@ -17,69 +19,110 @@ const Leaderboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [myUserId, setMyUserId] = useState<string | null>(null);
-  const [migrating, setMigrating] = useState(false);
-  const [migrationMessage, setMigrationMessage] = useState<string | null>(null);
+
+  // Only redirect to sign-in if loadLeaderboard fails to find a valid session
+  // Don't use isAuthenticated here because of timing issues with AuthContext updates
 
   useEffect(() => {
+    // Load immediately on mount
     loadLeaderboard();
-  }, []);
+
+    // Auto-refresh every 10 seconds
+    const refreshInterval = setInterval(() => {
+      loadLeaderboard();
+    }, 10000);
+
+    // Refresh when page becomes visible again
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadLeaderboard();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cleanup
+    return () => {
+      clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []); // Only run once on mount
 
   const loadLeaderboard = async () => {
     try {
-      setLoading(true);
       setError(null);
 
       // Get session data from localStorage
       const sessionData = localStorage.getItem('user_session');
 
       if (!sessionData) {
+        console.error('No session found in localStorage');
         setError('Please log in to view the leaderboard');
         setLoading(false);
+        navigate('/sign-in', { state: { from: '/leaderboard' } });
         return;
       }
 
       // Parse session data
       const parsedSession = JSON.parse(sessionData);
 
-      if (!parsedSession.user_id) {
+      if (!parsedSession.user_id || !parsedSession.token) {
+        console.error('Invalid session data');
         setError('Please log in to view the leaderboard');
         setLoading(false);
+        navigate('/sign-in', { state: { from: '/leaderboard' } });
         return;
       }
 
       setMyUserId(parsedSession.user_id);
 
       // Restore Session from token and refresh_token
-      const sessionObj = Session.restore(
+      let sessionObj = Session.restore(
         parsedSession.token,
         parsedSession.refresh_token
       );
 
       // Check if session is expired (pass current time in seconds)
       if (sessionObj.isexpired(Date.now() / 1000)) {
-        setError('Session expired. Please log in again.');
-        setLoading(false);
-        return;
+        console.log('Session expired, attempting to refresh...');
+        try {
+          // Try to refresh the session
+          const newSession = await nkClient.sessionRefresh(sessionObj);
+          // Update localStorage with new session
+          localStorage.setItem('user_session', JSON.stringify({
+            token: newSession.token,
+            refresh_token: newSession.refresh_token,
+            user_id: newSession.user_id,
+            username: newSession.username
+          }));
+          // Use the refreshed session
+          sessionObj = newSession;
+          console.log('Session refreshed successfully');
+        } catch (refreshError) {
+          console.error('Failed to refresh session:', refreshError);
+          setError('Session expired. Please log in again.');
+          setLoading(false);
+          navigate('/sign-in', { state: { from: '/leaderboard' } });
+          return;
+        }
       }
 
-      // Use Nakama's native leaderboard list function
-      const result = await nkClient.listLeaderboardRecords(
-        sessionObj,
-        'global_leaderboard',
-        [],  // ownerIds - empty for all players
-        100, // limit
-        undefined // cursor
-      );
+      // Call RPC to get leaderboard from storage (always shows current scores)
+      const response = await nkClient.rpc(sessionObj, 'get_leaderboard', { limit: 100 });
 
-      console.log('Leaderboard result:', result);
+      console.log('Leaderboard RPC response:', response);
 
-      if (result && result.records) {
-        const formattedEntries: LeaderboardEntry[] = result.records.map((record, index) => ({
-          rank: record.rank || (index + 1),
-          ownerId: record.owner_id || '',
-          username: record.username || 'Player',
-          score: record.score || 0,
-          numScore: record.num_score || 0
+      const result = typeof response.payload === 'string' ? JSON.parse(response.payload) : response.payload;
+
+      if (result.success && result.leaderboard) {
+        const formattedEntries: LeaderboardEntry[] = result.leaderboard.map((player: any, index: number) => ({
+          rank: index + 1,
+          ownerId: player.userId || '',
+          username: player.username || 'Player',
+          score: player.score || 0,
+          wins: player.wins || 0,
+          losses: player.losses || 0,
+          draws: player.draws || 0
         }));
         setEntries(formattedEntries);
       } else {
@@ -93,44 +136,7 @@ const Leaderboard: React.FC = () => {
     }
   };
 
-  const handleMigrateStats = async () => {
-    try {
-      setMigrating(true);
-      setMigrationMessage(null);
 
-      // Get session
-      const sessionData = localStorage.getItem('user_session');
-      if (!sessionData) {
-        setMigrationMessage('Please log in first');
-        return;
-      }
-
-      const parsedSession = JSON.parse(sessionData);
-      const sessionObj = Session.restore(
-        parsedSession.token,
-        parsedSession.refresh_token
-      );
-
-      // Call migration RPC
-      const response = await nkClient.rpc(sessionObj, 'migrate_stats_to_leaderboard', {});
-      const payload = typeof response.payload === 'string' ? JSON.parse(response.payload) : response.payload;
-
-      console.log('Migration result:', payload);
-
-      if (payload.success) {
-        setMigrationMessage(`✅ Migration complete! ${payload.migrated} players synced to leaderboard`);
-        // Reload leaderboard after migration
-        await loadLeaderboard();
-      } else {
-        setMigrationMessage(`❌ Migration failed: ${payload.error}`);
-      }
-    } catch (err: any) {
-      console.error('Migration error:', err);
-      setMigrationMessage('Migration failed: ' + (err.message || 'Unknown error'));
-    } finally {
-      setMigrating(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -156,11 +162,7 @@ const Leaderboard: React.FC = () => {
           </div>
         )}
 
-        {migrationMessage && (
-          <div className="mb-6 p-4 bg-blue-100 border-2 border-blue-500 text-blue-700 rounded-lg text-center font-semibold">
-            {migrationMessage}
-          </div>
-        )}
+
 
         {/* Leaderboard Table */}
         <div className="bg-white border-2 border-black rounded-lg shadow-[8px_8px_0px_0px_black] overflow-hidden">
@@ -176,6 +178,15 @@ const Leaderboard: React.FC = () => {
                   </th>
                   <th className="px-4 py-4 text-center text-xs font-bold text-black uppercase tracking-wider">
                     Score
+                  </th>
+                  <th className="px-4 py-4 text-center text-xs font-bold text-black uppercase tracking-wider">
+                    Wins
+                  </th>
+                  <th className="px-4 py-4 text-center text-xs font-bold text-black uppercase tracking-wider">
+                    Losses
+                  </th>
+                  <th className="px-4 py-4 text-center text-xs font-bold text-black uppercase tracking-wider">
+                    Draws
                   </th>
                 </tr>
               </thead>
@@ -235,6 +246,27 @@ const Leaderboard: React.FC = () => {
                             {entry.score}
                           </span>
                         </td>
+
+                        {/* Wins */}
+                        <td className="px-4 py-4 text-center">
+                          <span className="text-sm font-semibold text-green-600">
+                            {entry.wins}
+                          </span>
+                        </td>
+
+                        {/* Losses */}
+                        <td className="px-4 py-4 text-center">
+                          <span className="text-sm font-semibold text-red-600">
+                            {entry.losses}
+                          </span>
+                        </td>
+
+                        {/* Draws */}
+                        <td className="px-4 py-4 text-center">
+                          <span className="text-sm font-semibold text-gray-600">
+                            {entry.draws}
+                          </span>
+                        </td>
                       </tr>
                     );
                   })
@@ -252,15 +284,7 @@ const Leaderboard: React.FC = () => {
           >
             🔄 Refresh
           </button>
-          {entries.length === 0 && (
-            <button
-              onClick={handleMigrateStats}
-              disabled={migrating}
-              className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {migrating ? '⏳ Syncing...' : '🔄 Sync Stats to Leaderboard'}
-            </button>
-          )}
+
           <button
             onClick={() => navigate('/')}
             className="bg-white border-2 border-black text-black px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)]"
@@ -275,7 +299,7 @@ const Leaderboard: React.FC = () => {
           <div className="text-sm text-gray-700 space-y-1">
             <p>• Win: <span className="font-semibold text-green-600">+15 points</span></p>
             <p>• Loss: <span className="font-semibold text-red-600">−15 points</span></p>
-            <p>• Draw: <span className="font-semibold text-gray-600">+5 points</span></p>
+            <p>• Draw: <span className="font-semibold text-gray-600">+7 points</span></p>
             <p>• Leaderboard keeps your BEST score ever achieved</p>
           </div>
         </div>
