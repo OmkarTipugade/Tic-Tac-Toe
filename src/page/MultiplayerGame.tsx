@@ -49,23 +49,18 @@ const MultiplayerGame: React.FC = () => {
   const myPlayer = myUserId ? players[myUserId] : null;
   const mySymbol = myPlayer?.symbol;
 
-  // Get opponent info
   const opponentId = Object.keys(players).find(id => id !== myUserId);
   const opponent = opponentId ? players[opponentId] : null;
 
-  // Check if it's my turn
   const isMyTurn = currentTurn === myUserId && gameStatus === 'playing';
 
-  // Helper function to fetch player stats
   const fetchPlayerStats = async (userId: string, session: any): Promise<PlayerStats> => {
-    console.log('🔍 Fetching stats for userId:', userId);
     try {
       const response = await nkClient.rpc(session, 'get_player_stats_by_id', {
         userId: userId
       });
       const payload = typeof response.payload === 'string' ? JSON.parse(response.payload) : response.payload;
 
-      console.log('📊 Stats response for', userId, ':', payload);
 
       if (payload.success && payload.stats) {
         const stats = payload.stats;
@@ -78,7 +73,7 @@ const MultiplayerGame: React.FC = () => {
         };
       }
     } catch (error) {
-      console.error('❌ Failed to fetch player stats:', error);
+      console.error('Failed to fetch player stats:', error);
     }
 
     return { score: 0, wins: 0, losses: 0, draws: 0, winStreak: 0, winPercentage: 0 };
@@ -123,7 +118,6 @@ const MultiplayerGame: React.FC = () => {
 
       // Check if session is expired
       if (session.isexpired(Date.now() / 1000)) {
-        console.log('Session expired, refreshing...');
         try {
           // Try to refresh the session
           const newSession = await nkClient.sessionRefresh(session);
@@ -157,10 +151,8 @@ const MultiplayerGame: React.FC = () => {
       // Set up callbacks for real-time updates
       matchService.setCallbacks({
         onPlayerJoined: async (player) => {
-          console.log('=== PLAYER JOINED ===', player);
           // Only process if we're still in a valid game state
           if (gameStatus === 'idle') {
-            console.log('Ignoring player joined - game already canceled');
             return;
           }
 
@@ -171,7 +163,6 @@ const MultiplayerGame: React.FC = () => {
 
           // Fetch stats for the joined player
           const stats = await fetchPlayerStats(player.userId, session);
-          console.log('📊 Stats for joined player', player.userId, ':', stats);
           setPlayerStats(prev => ({
             ...prev,
             [player.userId]: stats
@@ -179,30 +170,24 @@ const MultiplayerGame: React.FC = () => {
 
           // Fetch avatar from user account
           try {
-            console.log('👤 Fetching avatar for', player.userId);
             const response = await nkClient.rpc(session, 'get_user_account_by_id', {
               userId: player.userId
             });
             const payloadStr = typeof response.payload === 'string' ? response.payload : JSON.stringify(response.payload);
             const payload = JSON.parse(payloadStr);
 
-            console.log('👤 Avatar response:', payload);
 
             if (payload.success && payload.account.user.avatar_url) {
               setPlayerAvatars(prev => ({
                 ...prev,
                 [player.userId]: payload.account.user.avatar_url
               }));
-              console.log('✅ Avatar set for', player.userId);
-            } else {
-              console.log('⚠️ No avatar for', player.userId);
-            }
+            } 
           } catch (error) {
-            console.error('❌ Failed to fetch avatar:', error);
+            console.error('Failed to fetch avatar:', error);
           }
         },
         onGameStart: async (data) => {
-          console.log('=== GAME START ===', data);
           // Only process if we're still in a valid game state
           setGameStatus(prev => {
             if (prev === 'idle') {
@@ -219,11 +204,9 @@ const MultiplayerGame: React.FC = () => {
 
           // Fetch stats AND avatars for ALL players
           for (const userId of Object.keys(data.players)) {
-            console.log('🔍 Fetching data for player:', userId);
 
             // Fetch stats
             const stats = await fetchPlayerStats(userId, session);
-            console.log('📊 Stats fetched for', userId, ':', stats);
             setPlayerStats(prev => ({
               ...prev,
               [userId]: stats
@@ -237,26 +220,21 @@ const MultiplayerGame: React.FC = () => {
               const payloadStr = typeof response.payload === 'string' ? response.payload : JSON.stringify(response.payload);
               const payload = JSON.parse(payloadStr);
 
-              console.log('👤 Avatar response for', userId, ':', payload);
 
               if (payload.success && payload.account.user.avatar_url) {
                 setPlayerAvatars(prev => ({
                   ...prev,
                   [userId]: payload.account.user.avatar_url
                 }));
-                console.log('✅ Avatar set for', userId, ':', payload.account.user.avatar_url);
-              } else {
-                console.log('⚠️ No avatar URL for', userId);
-              }
+              } 
             } catch (error) {
-              console.error('❌ Failed to fetch avatar for', userId, error);
+              console.error('Failed to fetch avatar for', userId, error);
             }
           }
 
           toast.success('Game started! Good luck!');
         },
         onMoveMade: (data) => {
-          console.log('Move made:', data);
           setLastMoveData(data); // Store for potential use in onGameOver
 
           // Check if this is a timeout (position === -1)
@@ -275,13 +253,6 @@ const MultiplayerGame: React.FC = () => {
           setCurrentTurn(data.currentTurn);
         },
         onGameOver: async (data) => {
-          console.log('=== GAME OVER ===', {
-            winner: data.winner,
-            isDraw: data.isDraw,
-            reason: data.reason,
-            myUserId,
-            sessionExists: !!session
-          });
 
           setBoard(data.board);
           setWinner(data.winner || null);
@@ -290,18 +261,15 @@ const MultiplayerGame: React.FC = () => {
 
           // Backend now handles ALL stats updates (forfeit AND normal games)
           // Just refetch stats for both players
-          console.log('📊 Refetching stats for both players after backend update');
 
           // Delay to ensure backend has written stats
           await new Promise(resolve => setTimeout(resolve, 500));
 
-          // Refetch my stats
           const myStats = await fetchPlayerStats(myUserId, session);
           if (myStats) {
             setPlayerStats(prev => ({ ...prev, [myUserId]: myStats }));
           }
 
-          // Refetch opponent stats
           if (opponentId) {
             const opponentStats = await fetchPlayerStats(opponentId, session);
             if (opponentStats) {
@@ -309,7 +277,6 @@ const MultiplayerGame: React.FC = () => {
             }
           }
 
-          // Show appropriate message based on result
           if (data.reason === 'forfeit') {
             if (data.winner === myUserId) {
               toast.info('Opponent forfeited. You win! +15 points 🎉');
@@ -325,12 +292,10 @@ const MultiplayerGame: React.FC = () => {
           }
         },
         onPlayerDisconnected: (userId) => {
-          console.log('Player disconnected:', userId);
           toast.warning('Opponent disconnected');
           setErrorMessage('Opponent disconnected from the game');
         },
         onError: (error) => {
-          console.error('Match error:', error);
           toast.error(error);
           setErrorMessage(error);
         }
@@ -341,9 +306,7 @@ const MultiplayerGame: React.FC = () => {
 
       setGameStatus('finding_match');
 
-      // Find a match
-      const matchId = await matchService.findMatch(mode, time);
-      console.log('Joined match:', matchId);
+
 
       // Check if user cancelled while we were finding the match
       if (isCancelling) {
@@ -382,19 +345,15 @@ const MultiplayerGame: React.FC = () => {
   };
 
   const handleLeaveMatch = async (confirmed: boolean = false) => {
-    // If game is in progress and not confirmed, show confirmation dialog
     if (gameStatus === 'playing' && !winner && !isDraw && !confirmed) {
       setShowLeaveConfirmation(true);
       return;
     }
 
-    // Close confirmation dialog if open
     setShowLeaveConfirmation(false);
 
-    // Set cancelling flag to stop any ongoing match finding
     setIsCancelling(true);
 
-    // Immediately set to idle to prevent any race conditions with incoming messages
     const wasInProgress = gameStatus === 'playing' && !winner && !isDraw;
     setGameStatus('idle');
 
@@ -442,7 +401,6 @@ const MultiplayerGame: React.FC = () => {
     } catch (error) {
       console.error('Error during cleanup:', error);
     } finally {
-      // Always navigate back, even if cleanup failed
       navigate('/');
     }
   };
@@ -452,7 +410,6 @@ const MultiplayerGame: React.FC = () => {
     if (!matchServiceRef.current) return;
 
     toast.warning('Time expired! Turn skipped');
-    // Make a move with position -1 to indicate timeout
     try {
       await matchServiceRef.current.makeMove(-1);
     } catch (error) {
@@ -460,7 +417,6 @@ const MultiplayerGame: React.FC = () => {
     }
   };
 
-  // Timer countdown effect
   useEffect(() => {
     if (gameMode !== 'timed' || !isMyTurn || !timeLimit || gameStatus !== 'playing') {
       setTimeRemaining(null);
@@ -472,7 +428,6 @@ const MultiplayerGame: React.FC = () => {
     const interval = setInterval(() => {
       setTimeRemaining(prev => {
         if (prev === null || prev <= 1) {
-          // Time's up - trigger timeout
           handleTimeout();
           return null;
         }
@@ -493,7 +448,6 @@ const MultiplayerGame: React.FC = () => {
     setGameStatus('idle');
     setShowModeModal(true);
 
-    // Clean up existing connection
     if (matchServiceRef.current) {
       matchServiceRef.current.leaveMatch();
       matchServiceRef.current.disconnect();
@@ -513,12 +467,10 @@ const MultiplayerGame: React.FC = () => {
   // Detect browser navigation/close during active game
   useEffect(() => {
     const handleBeforeUnload = async (e: BeforeUnloadEvent) => {
-      // Only intervene if game is in progress
       if (gameStatus === 'playing' && !winner && !isDraw && matchServiceRef.current) {
         // Send forfeit message
         try {
           await matchServiceRef.current.sendForfeit();
-          console.log('Forfeit sent due to navigation/close');
         } catch (error) {
           console.error('Failed to send forfeit on navigation:', error);
         }
@@ -538,7 +490,6 @@ const MultiplayerGame: React.FC = () => {
     // This cleanup function runs when component unmounts (route change)
     return () => {
       if (gameStatus === 'playing' && !winner && !isDraw && matchServiceRef.current) {
-        console.log('Route change detected during active game - sending forfeit');
         // Send forfeit synchronously (best-effort)
         matchServiceRef.current.sendForfeit().catch(err => {
           console.error('Failed to send forfeit on route change:', err);

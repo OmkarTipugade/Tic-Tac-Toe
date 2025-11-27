@@ -85,7 +85,6 @@ const Leaderboard: React.FC = () => {
 
       // Check if session is expired (pass current time in seconds)
       if (sessionObj.isexpired(Date.now() / 1000)) {
-        console.log('Session expired, attempting to refresh...');
         try {
           // Try to refresh the session
           const newSession = await nkClient.sessionRefresh(sessionObj);
@@ -98,7 +97,6 @@ const Leaderboard: React.FC = () => {
           }));
           // Use the refreshed session
           sessionObj = newSession;
-          console.log('Session refreshed successfully');
         } catch (refreshError) {
           console.error('Failed to refresh session:', refreshError);
           setError('Session expired. Please log in again.');
@@ -110,8 +108,6 @@ const Leaderboard: React.FC = () => {
 
       // Call RPC to get leaderboard from storage (always shows current scores)
       const response = await nkClient.rpc(sessionObj, 'get_leaderboard', { limit: 100 });
-
-      console.log('Leaderboard RPC response:', response);
 
       const result = typeof response.payload === 'string' ? JSON.parse(response.payload) : response.payload;
 
@@ -217,7 +213,6 @@ const Leaderboard: React.FC = () => {
                         className={`transition-colors ${isCurrentUser ? 'bg-yellow-50 border-2 border-yellow-400' : 'hover:bg-gray-50'
                           }`}
                       >
-                        {/* Rank */}
                         <td className="px-4 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
                             {entry.rank === 1 && <span className="text-3xl">🥇</span>}
@@ -230,7 +225,6 @@ const Leaderboard: React.FC = () => {
                           </div>
                         </td>
 
-                        {/* Player */}
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <span className={`text-sm font-bold ${isCurrentUser ? 'text-yellow-700' : 'text-black'
@@ -245,14 +239,12 @@ const Leaderboard: React.FC = () => {
                           </div>
                         </td>
 
-                        {/* Location */}
                         <td className="px-4 py-4">
                           <span className="text-sm text-gray-700">
                             {entry.location || '-'}
                           </span>
                         </td>
 
-                        {/* Score */}
                         <td className="px-4 py-4 text-center">
                           <span className="text-lg font-bold text-black">
                             {entry.score}
@@ -307,12 +299,11 @@ const Leaderboard: React.FC = () => {
 
         {/* Legend */}
         <div className="mt-8 p-4 bg-gray-50 border-2 border-gray-300 rounded-lg">
-          <h3 className="font-bold text-black mb-2">📊 Scoring System</h3>
+          <h3 className="font-bold text-black mb-2">Scoring System</h3>
           <div className="text-sm text-gray-700 space-y-1">
             <p>• Win: <span className="font-semibold text-green-600">+15 points</span></p>
             <p>• Loss: <span className="font-semibold text-red-600">−15 points</span></p>
             <p>• Draw: <span className="font-semibold text-gray-600">+7 points</span></p>
-            <p>• Leaderboard keeps your BEST score ever achieved</p>
           </div>
         </div>
       </div>

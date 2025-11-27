@@ -147,7 +147,6 @@ const ProfilePage: React.FC = () => {
         return;
       }
 
-      console.log("Updating account on Nakama server...");
 
       const session = Session.restore(
         sessionData.token,
@@ -171,8 +170,6 @@ const ProfilePage: React.FC = () => {
       if (!result.success) {
         throw new Error(result.error || "Update failed");
       }
-
-      console.log("Nakama update successful!", result);
 
       const updatedUser = {
         ...user,

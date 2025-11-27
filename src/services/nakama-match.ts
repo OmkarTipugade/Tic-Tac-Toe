@@ -57,11 +57,6 @@ export class NakamaMatchService {
       this.handleMatchData(matchData);
     };
 
-    this.socket.onmatchpresence = (presence) => {
-      console.log("Match presence update:", presence);
-    };
-
-    console.log("Socket connected successfully");
   }
 
   setCallbacks(callbacks: MatchCallbacks): void {
@@ -122,7 +117,6 @@ export class NakamaMatchService {
     }
 
     this.currentMatch = await this.socket.joinMatch(matchId);
-    console.log("Joined match:", matchId);
   }
 
   async makeMove(position: number): Promise<void> {
@@ -145,16 +139,13 @@ export class NakamaMatchService {
 
   async leaveMatch(): Promise<void> {
     if (!this.socket || !this.currentMatch) {
-      console.log('No active match to leave');
       return;
     }
 
     try {
       await this.socket.leaveMatch(this.currentMatch.match_id);
-      console.log('Successfully left match:', this.currentMatch.match_id);
     } catch (error) {
       console.error('Error leaving match:', error);
-      // Don't throw - just log the error
     } finally {
       this.currentMatch = null;
     }
@@ -181,7 +172,6 @@ export class NakamaMatchService {
     if (this.socket) {
       try {
         this.socket.disconnect(true);
-        console.log('Socket disconnected successfully');
       } catch (error) {
         console.error('Error disconnecting socket:', error);
       }
@@ -205,7 +195,6 @@ export class NakamaMatchService {
         data = matchData.data;
       }
 
-      console.log("Received match data:", data);
 
       switch (data.type) {
         case 'player_joined':
@@ -251,9 +240,6 @@ export class NakamaMatchService {
             this.callbacks.onPlayerDisconnected(data.userId);
           }
           break;
-
-        default:
-          console.log("Unknown message type:", (data as any).type);
       }
     } catch (error) {
       console.error("Error handling match data:", error);

@@ -50,10 +50,10 @@ function rpcFindMatch(ctx, logger, nk, payload) {
             logger.info('  Comparing: searchMode=' + mode + ' vs labelMode=' + label.mode + ', searchTime=' + searchTime + ' vs labelTime=' + labelTime);
 
             if (label.mode === mode && labelTime === searchTime) {
-                logger.info('✅ MATCH FOUND! Returning existing match: ' + match.matchId + ' (size=' + match.size + ')');
+                logger.info(' MATCH FOUND! Returning existing match: ' + match.matchId + ' (size=' + match.size + ')');
                 return JSON.stringify({ matchId: match.matchId });
             } else {
-                logger.info('  ❌ No match: mode or time mismatch');
+                logger.info('No match: mode or time mismatch');
             }
         } catch (e) {
             // If label parsing fails, skip this match

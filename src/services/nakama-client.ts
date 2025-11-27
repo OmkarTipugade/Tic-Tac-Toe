@@ -9,7 +9,6 @@ export const nkClient = new Client(SERVER_KEY, HOST, PORT, USE_SSL);
 export async function authenticateDevice(deviceId: string) {
     try {
         const session = await nkClient.authenticateDevice(deviceId, true);
-        console.log("Authenticated successfully:", session.user_id);
         return session;
     } catch (error) {
         console.error("Authentication failed:", error);

@@ -145,9 +145,6 @@ const SignIn: React.FC = () => {
         >
           {isSubmitting ? "Signing In..." : "Sign In"}
         </button>
-
-        <p className="text-center text-gray-700 text-sm">Forgot Password?</p>
-
         <p
           className="text-center text-black text-sm cursor-pointer underline"
           onClick={() => navigate("/sign-up")}

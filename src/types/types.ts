@@ -68,8 +68,8 @@ interface MatchPlayer {
 }
 
 interface MultiplayerGameState {
-  board: string[]; // Backend uses flat array of 9 elements
-  currentTurn: string; // userId
+  board: string[]; 
+  currentTurn: string; 
   players: { [userId: string]: MatchPlayer };
   playerSymbols: { [userId: string]: string };
   winner: string | null;
@@ -106,7 +106,7 @@ interface MoveMadeMessage {
   symbol: string;
   board: string[];
   currentTurn: string;
-  timeTaken?: number;  // Server-calculated time for this move
+  timeTaken?: number; 
 }
 
 interface GameOverMessage {
@@ -128,7 +128,7 @@ interface PlayerStats {
   losses: number;
   draws: number;
   winStreak: number;
-  winPercentage: number; // calculated from wins/(wins+losses+draws)
+  winPercentage: number; 
 }
 
 type BackendMessage =
