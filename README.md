@@ -116,7 +116,6 @@ graph LR
     subgraph "Game Components"
         Board[Board Component]
         PlayerCard[Player Card]
-        MoveSummary[Move Summary]
         GameOver[Game Over Modal]
     end
     
@@ -131,7 +130,6 @@ graph LR
     MP --> NC
     MP --> Board
     MP --> PlayerCard
-    MP --> MoveSummary
     MP --> GameOver
     
     PG --> Board
