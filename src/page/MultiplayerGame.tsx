@@ -83,11 +83,11 @@ const MultiplayerGame: React.FC = () => {
     setShowModeModal(false);
     setGameMode(mode);
     setTimeLimit(time);
-    await initializeGame(mode, time);
+    await initializeGame();
   };
 
 
-  const initializeGame = async (mode: GameMode, time?: number) => {
+  const initializeGame = async () => {
     try {
       setIsCancelling(false); // Reset cancelling flag
       setGameStatus('connecting');
@@ -291,7 +291,7 @@ const MultiplayerGame: React.FC = () => {
             toast.info('You lost. -15 points. Better luck next time!');
           }
         },
-        onPlayerDisconnected: (userId) => {
+        onPlayerDisconnected: () => {
           toast.warning('Opponent disconnected');
           setErrorMessage('Opponent disconnected from the game');
         },
