@@ -119,7 +119,7 @@ You must manually allow Nakama ports (7350 and 7351).
 * Network: `default`
 * Targets: All instances
 * Source: `0.0.0.0/0`
-* Protocols and Ports: TCP → `7350`
+* Protocols and Ports: TCP → `7350`,`7351`
 
 Click **Create**
 
