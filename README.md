@@ -103,7 +103,31 @@ graph TB
     
     NKClient -.HTTP/WebSocket.-> NakamaCore
     MatchService -.WebSocket.-> MatchHandler
-    
+
+    %% ---- Styling ----
+    style UI stroke:#333,stroke-width:2px
+    style Router stroke:#333,stroke-width:2px
+    style Auth stroke:#333,stroke-width:2px
+    style NKClient stroke:#333,stroke-width:2px
+    style MatchService stroke:#333,stroke-width:2px
+
+    style Home stroke:#444,stroke-width:2px
+    style SignIn stroke:#444,stroke-width:2px
+    style SignUp stroke:#444,stroke-width:2px
+    style Profile stroke:#444,stroke-width:2px
+    style PlayGame stroke:#444,stroke-width:2px
+    style Multiplayer stroke:#444,stroke-width:2px
+    style Leaderboard stroke:#444,stroke-width:2px
+
+    style NakamaCore stroke:#000,stroke-width:2px
+    style RPCs stroke:#000,stroke-width:2px
+    style MatchHandler stroke:#000,stroke-width:2px
+    style Storage stroke:#000,stroke-width:2px
+    style LeaderboardAPI stroke:#000,stroke-width:2px
+
+    style UserAccounts stroke:#222,stroke-width:2px
+    style PlayerStats stroke:#222,stroke-width:2px
+    style MatchData stroke:#222,stroke-width:2px
 ```
 ```mermaid
 graph LR
@@ -138,10 +162,23 @@ graph LR
     LB --> NC
     PR --> NC
     PR --> AC
-    
-    style Core Services fill:#FFE66D,stroke:#333
-    style Game Components fill:#A8DADC,stroke:#333
-    style Pages fill:#F1FAEE,stroke:#333
+
+    %% ---- Styling ----
+    style NC stroke:#333,stroke-width:2px
+    style MS stroke:#333,stroke-width:2px
+    style AC stroke:#333,stroke-width:2px
+    style Board stroke:#333,stroke-width:2px
+    style PlayerCard stroke:#333,stroke-width:2px
+    style GameOver stroke:#333,stroke-width:2px
+    style MP stroke:#333,stroke-width:2px
+    style PG stroke:#333,stroke-width:2px
+    style LB stroke:#333,stroke-width:2px
+    style PR stroke:#333,stroke-width:2px
+
+    style Core Services fill:#FFE66D,stroke:#333,stroke-width:3px
+    style Game Components fill:#A8DADC,stroke:#333,stroke-width:3px
+    style Pages fill:#F1FAEE,stroke:#333,stroke-width:3px
+
 ```
 
 ### Data Flow Diagram
