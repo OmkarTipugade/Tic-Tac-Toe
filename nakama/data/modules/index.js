@@ -299,7 +299,8 @@ function rpcGetPlayerStats(ctx, logger, nk, payload) {
             wins: 0,
             losses: 0,
             draws: 0,
-            winStreak: 0
+            winStreak: 0,
+            bestWinStreak: 0
         };
 
         if (objects.length > 0 && objects[0].value) {
@@ -353,12 +354,18 @@ function rpcGetPlayerStatsById(ctx, logger, nk, payload) {
             wins: 0,
             losses: 0,
             draws: 0,
-            winStreak: 0
+            winStreak: 0,
+            bestWinStreak: 0
         };
 
         if (objects.length > 0 && objects[0].value) {
             // Value is stored as object, not string
             stats = objects[0].value;
+
+            // Ensure bestWinStreak exists (for backwards compatibility)
+            if (typeof stats.bestWinStreak === 'undefined') {
+                stats.bestWinStreak = stats.winStreak || 0;
+            }
         }
 
         logger.info('Retrieved stats for user ' + targetUserId + ': ' + JSON.stringify(stats));
@@ -415,12 +422,18 @@ function rpcUpdatePlayerStats(ctx, logger, nk, payload) {
             wins: 0,
             losses: 0,
             draws: 0,
-            winStreak: 0
+            winStreak: 0,
+            bestWinStreak: 0
         };
 
         if (objects.length > 0 && objects[0].value) {
             // Value is stored as object, not string
             stats = objects[0].value;
+
+            // Ensure bestWinStreak exists (for backwards compatibility)
+            if (typeof stats.bestWinStreak === 'undefined') {
+                stats.bestWinStreak = stats.winStreak || 0;
+            }
         }
 
         // Update stats based on result
@@ -428,6 +441,12 @@ function rpcUpdatePlayerStats(ctx, logger, nk, payload) {
             stats.score += 15;
             stats.wins += 1;
             stats.winStreak += 1;
+
+            // Update bestWinStreak if current streak is higher
+            if (stats.winStreak > stats.bestWinStreak) {
+                stats.bestWinStreak = stats.winStreak;
+                logger.info('New best win streak for ' + userId + ': ' + stats.bestWinStreak);
+            }
         } else if (isDraw) {
             stats.score += 7;
             stats.draws += 1;
@@ -659,11 +678,17 @@ function updatePlayerStatsForForfeit(nk, logger, userId, isWinner) {
             wins: 0,
             losses: 0,
             draws: 0,
-            winStreak: 0
+            winStreak: 0,
+            bestWinStreak: 0
         };
 
         if (objects.length > 0 && objects[0].value) {
             stats = objects[0].value;
+
+            // Ensure bestWinStreak exists (for backwards compatibility)
+            if (typeof stats.bestWinStreak === 'undefined') {
+                stats.bestWinStreak = stats.winStreak || 0;
+            }
         }
 
         // Update stats based on result
@@ -671,6 +696,13 @@ function updatePlayerStatsForForfeit(nk, logger, userId, isWinner) {
             stats.score += 15;
             stats.wins += 1;
             stats.winStreak += 1;
+
+            // Update bestWinStreak if current streak is higher
+            if (stats.winStreak > stats.bestWinStreak) {
+                stats.bestWinStreak = stats.winStreak;
+                logger.info('New best win streak for ' + userId + ': ' + stats.bestWinStreak);
+            }
+
             logger.info('Updating winner stats for ' + userId + ': +15 points, +1 win');
         } else {
             stats.score -= 15;
@@ -715,6 +747,100 @@ function updatePlayerStatsForForfeit(nk, logger, userId, isWinner) {
 
     } catch (error) {
         logger.error('Error updating stats for forfeit: ' + error);
+        throw error;
+    }
+}
+
+// Helper function to update player stats based on game result (win/loss/draw)
+function updatePlayerStatsForResult(nk, logger, userId, result) {
+    try {
+        // Read current stats
+        const objectIds = [{
+            collection: 'player_stats',
+            key: 'stats',
+            userId: userId
+        }];
+
+        const objects = nk.storageRead(objectIds);
+
+        let stats = {
+            score: 0,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            winStreak: 0,
+            bestWinStreak: 0
+        };
+
+        if (objects.length > 0 && objects[0].value) {
+            stats = objects[0].value;
+
+            // Ensure bestWinStreak exists (for backwards compatibility)
+            if (typeof stats.bestWinStreak === 'undefined') {
+                stats.bestWinStreak = stats.winStreak || 0;
+            }
+        }
+
+        // Update based on result
+        if (result === 'win') {
+            stats.score += 15;
+            stats.wins += 1;
+            stats.winStreak += 1;
+
+            // Update bestWinStreak if current streak is higher
+            if (stats.winStreak > stats.bestWinStreak) {
+                stats.bestWinStreak = stats.winStreak;
+                logger.info('New best win streak for ' + userId + ': ' + stats.bestWinStreak);
+            }
+
+            logger.info('Updating winner stats for ' + userId + ': +15 points, +1 win, streak=' + stats.winStreak);
+        } else if (result === 'loss') {
+            stats.score -= 15;
+            stats.losses += 1;
+            stats.winStreak = 0;
+            logger.info('Updating loser stats for ' + userId + ': -15 points, +1 loss, streak reset');
+        } else if (result === 'draw') {
+            stats.score += 7;
+            stats.draws += 1;
+            stats.winStreak = 0;
+            logger.info('Updating draw stats for ' + userId + ': +7 points, +1 draw, streak reset');
+        }
+
+        // Ensure score doesn't go below 0
+        if (stats.score < 0) {
+            stats.score = 0;
+        }
+
+        // Write updated stats
+        const writeOps = [{
+            collection: 'player_stats',
+            key: 'stats',
+            userId: userId,
+            value: stats,
+            permissionRead: 1,
+            permissionWrite: 0
+        }];
+        nk.storageWrite(writeOps);
+
+        logger.info('Stats updated for ' + userId + ': result=' + result + ', new stats: ' + JSON.stringify(stats));
+
+        // Update leaderboard
+        try {
+            var username = 'Player';
+            try {
+                var account = nk.accountGetId(userId);
+                username = account.user.username || account.user.displayName || 'Player';
+            } catch (e) {
+                // Use default
+            }
+            nk.leaderboardRecordWrite('global_leaderboard', userId, username, stats.score, 0, null);
+            logger.info('Leaderboard updated for ' + userId);
+        } catch (e) {
+            logger.warn('Failed to update leaderboard: ' + e);
+        }
+
+    } catch (error) {
+        logger.error('Error updating stats for ' + result + ': ' + error);
         throw error;
     }
 }
@@ -968,11 +1094,35 @@ function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
                 const winner = checkWinner(state.board);
                 if (winner) {
                     state.winner = message.sender.userId;
+
+                    // Find opponent
+                    let opponentId = null;
+                    for (let key in state.players) {
+                        if (key !== message.sender.userId) {
+                            opponentId = key;
+                            break;
+                        }
+                    }
+
+                    // Update stats for both players on backend
+                    if (opponentId) {
+                        try {
+                            // Winner gets +15, +1 win, streak++
+                            updatePlayerStatsForResult(nk, logger, message.sender.userId, 'win');
+                            // Loser gets -15, +1 loss, streak=0
+                            updatePlayerStatsForResult(nk, logger, opponentId, 'loss');
+                            logger.info('Stats updated for win: Winner=' + message.sender.userId + ', Loser=' + opponentId);
+                        } catch (error) {
+                            logger.error('Failed to update stats for win: ' + error);
+                        }
+                    }
+
                     const gameOverMessage = {
                         type: 'game_over',
                         winner: state.winner,
                         board: state.board,
-                        isDraw: false
+                        isDraw: false,
+                        reason: 'normal'
                     };
                     dispatcher.broadcastMessage(0, JSON.stringify(gameOverMessage));
                     logger.info('Game over! Winner: ' + message.sender.username);
@@ -983,10 +1133,22 @@ function matchLoop(ctx, logger, nk, dispatcher, tick, state, messages) {
                 // Check for draw
                 if (state.moveCount === 9) {
                     state.isDraw = true;
+
+                    // Update stats for both players - draw gives +7 to both
+                    try {
+                        for (let userId in state.players) {
+                            updatePlayerStatsForResult(nk, logger, userId, 'draw');
+                        }
+                        logger.info('Stats updated for draw - both players get +7');
+                    } catch (error) {
+                        logger.error('Failed to update stats for draw: ' + error);
+                    }
+
                     const gameOverMessage = {
                         type: 'game_over',
                         board: state.board,
-                        isDraw: true
+                        isDraw: true,
+                        reason: 'normal'
                     };
                     dispatcher.broadcastMessage(0, JSON.stringify(gameOverMessage));
                     logger.info('Game over! Draw');

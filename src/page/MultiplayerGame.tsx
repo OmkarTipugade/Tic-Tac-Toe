@@ -84,37 +84,6 @@ const MultiplayerGame: React.FC = () => {
     return { score: 0, wins: 0, losses: 0, draws: 0, winStreak: 0, winPercentage: 0 };
   };
 
-  // Helper function to update player stats
-  const updatePlayerStats = async (isWin: boolean, isDraw: boolean, session: any) => {
-    console.log('📊 updatePlayerStats called:', { isWin, isDraw, hasSession: !!session });
-    try {
-      const response = await nkClient.rpc(session, 'update_player_stats', {
-        isWin,
-        isDraw
-      });
-
-      const payload = typeof response.payload === 'string' ? JSON.parse(response.payload) : response.payload;
-      console.log('📊 Stats update response:', payload);
-
-      if (payload.success && payload.stats) {
-        const stats = payload.stats;
-        const totalGames = stats.wins + stats.losses + stats.draws;
-        const winPercentage = totalGames > 0 ? (stats.wins / totalGames) * 100 : 0;
-
-        return {
-          ...stats,
-          winPercentage
-        };
-      } else {
-        console.error('❌ Stats update failed:', payload.error || 'Unknown error');
-      }
-    } catch (error) {
-      console.error('❌ Failed to update player stats:', error);
-    }
-
-    return null;
-  };
-
   const handleModeSelect = async (mode: GameMode, time?: number) => {
     setShowModeModal(false);
     setGameMode(mode);
@@ -314,127 +283,44 @@ const MultiplayerGame: React.FC = () => {
             sessionExists: !!session
           });
 
-
           setBoard(data.board);
           setWinner(data.winner || null);
           setIsDraw(data.isDraw);
           setGameStatus('finished');
 
-          // Check if this was a forfeit
-          const isForfeit = data.reason === 'forfeit';
+          // Backend now handles ALL stats updates (forfeit AND normal games)
+          // Just refetch stats for both players
+          console.log('📊 Refetching stats for both players after backend update');
 
-          // Backend already updated stats for forfeit, so we just need to refetch
-          // For normal games, we need to update stats
-          if (isForfeit) {
-            // Stats already updated on backend, just refetch for both players
-            console.log('📊 Forfeit detected - refetching stats for both players');
+          // Delay to ensure backend has written stats
+          await new Promise(resolve => setTimeout(resolve, 500));
 
-            // Add delay to ensure backend has completed stats updates
-            await new Promise(resolve => setTimeout(resolve, 500));
+          // Refetch my stats
+          const myStats = await fetchPlayerStats(myUserId, session);
+          if (myStats) {
+            setPlayerStats(prev => ({ ...prev, [myUserId]: myStats }));
+          }
 
-            // Refetch my stats
-            const myStats = await fetchPlayerStats(myUserId, session);
-            if (myStats) {
-              setPlayerStats(prev => ({
-                ...prev,
-                [myUserId]: myStats
-              }));
+          // Refetch opponent stats
+          if (opponentId) {
+            const opponentStats = await fetchPlayerStats(opponentId, session);
+            if (opponentStats) {
+              setPlayerStats(prev => ({ ...prev, [opponentId]: opponentStats }));
             }
+          }
 
-            // Refetch opponent's stats
-            if (opponentId) {
-              const opponentStats = await fetchPlayerStats(opponentId, session);
-              if (opponentStats) {
-                setPlayerStats(prev => ({
-                  ...prev,
-                  [opponentId]: opponentStats
-                }));
-              }
-            }
-
-            // Show forfeit-specific notifications
+          // Show appropriate message based on result
+          if (data.reason === 'forfeit') {
             if (data.winner === myUserId) {
               toast.info('Opponent forfeited. You win! +15 points 🎉');
             } else {
               toast.warning('You forfeited. -15 points');
             }
           } else if (data.isDraw) {
-            // Both players get +7 for draw
-            console.log('📊 Updating stats for DRAW');
-            const updatedStats = await updatePlayerStats(false, true, session);
-            console.log('📊 Draw stats result:', updatedStats);
-            if (updatedStats) {
-              setPlayerStats(prev => ({
-                ...prev,
-                [myUserId]: updatedStats
-              }));
-            }
-
-            // Refetch opponent's stats (they also got +7)
-            // Add delay to ensure opponent's backend has updated their stats
-            if (opponentId) {
-              console.log('🔄 Waiting to refetch opponent stats...');
-              await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
-              console.log('🔍 Refetching opponent stats for:', opponentId);
-              const opponentStats = await fetchPlayerStats(opponentId, session);
-              console.log('✅ Opponent stats updated:', opponentStats);
-              setPlayerStats(prev => ({
-                ...prev,
-                [opponentId]: opponentStats
-              }));
-            }
             toast.info("It's a draw! +7 points");
           } else if (data.winner === myUserId) {
-            // Winner gets +15
-            console.log('📊 Updating stats for WIN');
-            const updatedStats = await updatePlayerStats(true, false, session);
-            console.log('📊 Win stats result:', updatedStats);
-            if (updatedStats) {
-              setPlayerStats(prev => ({
-                ...prev,
-                [myUserId]: updatedStats
-              }));
-            }
-
-            // Refetch opponent's stats (they got -15)
-            // Add delay to ensure opponent's backend has updated their stats
-            if (opponentId) {
-              console.log('🔄 Waiting to refetch opponent stats...');
-              await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
-              console.log('🔍 Refetching opponent stats for:', opponentId);
-              const opponentStats = await fetchPlayerStats(opponentId, session);
-              console.log('✅ Opponent stats updated:', opponentStats);
-              setPlayerStats(prev => ({
-                ...prev,
-                [opponentId]: opponentStats
-              }));
-            }
             toast.success('You won! +15 points 🎉');
           } else {
-            // Loser gets -15
-            console.log('📊 Updating stats for LOSS');
-            const updatedStats = await updatePlayerStats(false, false, session);
-            console.log('📊 Loss stats result:', updatedStats);
-            if (updatedStats) {
-              setPlayerStats(prev => ({
-                ...prev,
-                [myUserId]: updatedStats
-              }));
-            }
-
-            // Refetch opponent's stats (they got +15)
-            // Add delay to ensure opponent's backend has updated their stats
-            if (opponentId) {
-              console.log('🔄 Waiting to refetch opponent stats...');
-              await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay
-              console.log('🔍 Refetching opponent stats for:', opponentId);
-              const opponentStats = await fetchPlayerStats(opponentId, session);
-              console.log('✅ Opponent stats updated:', opponentStats);
-              setPlayerStats(prev => ({
-                ...prev,
-                [opponentId]: opponentStats
-              }));
-            }
             toast.info('You lost. -15 points. Better luck next time!');
           }
         },

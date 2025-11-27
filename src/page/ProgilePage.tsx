@@ -81,7 +81,7 @@ const ProfilePage: React.FC = () => {
 
               setStats({
                 ...fetchedStats,
-                bestWinStreak: fetchedStats.winStreak, // Using current as best for now
+                bestWinStreak: fetchedStats.bestWinStreak || fetchedStats.winStreak || 0, // Use backend value with fallback
               });
             } else {
               // Fallback to zeros if no stats

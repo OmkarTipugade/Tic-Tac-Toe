@@ -177,9 +177,6 @@ const Leaderboard: React.FC = () => {
                   <th className="px-4 py-4 text-center text-xs font-bold text-black uppercase tracking-wider">
                     Score
                   </th>
-                  <th className="px-4 py-4 text-center text-xs font-bold text-black uppercase tracking-wider hidden sm:table-cell">
-                    Games
-                  </th>
                 </tr>
               </thead>
 
@@ -236,13 +233,6 @@ const Leaderboard: React.FC = () => {
                         <td className="px-4 py-4 text-center">
                           <span className="text-lg font-bold text-black">
                             {entry.score}
-                          </span>
-                        </td>
-
-                        {/* Games Played */}
-                        <td className="px-4 py-4 text-center hidden sm:table-cell">
-                          <span className="text-sm text-gray-600">
-                            {entry.numScore}
                           </span>
                         </td>
                       </tr>
