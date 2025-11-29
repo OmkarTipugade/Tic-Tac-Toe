@@ -261,7 +261,7 @@ tic-tac-toe/
 │   │   ├── Home.tsx
 │   │   ├── Leaderboard.tsx
 │   │   ├── MultiplayerGame.tsx
-│   │   ├── PlayGame.tsx       # Single player
+│   │   ├── PlayGame.tsx       # Offline Game
 │   │   └── ProgilePage.tsx    # User profile
 │   │
 │   ├── services/
